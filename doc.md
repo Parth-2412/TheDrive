@@ -1,0 +1,341 @@
+# E2E Encrypted Cloud Storage with Decentralized AI
+
+## Overview
+
+This system provides end-to-end encrypted cloud storage with AI-powered document search and chat capabilities. The architecture combines the security of self-sovereign identity (seed phrases) with the convenience of decentralized AI processing nodes.
+
+## Core Architecture Principles
+
+- **Zero-Knowledge Storage**: Server never sees plaintext data or encryption keys
+- **Self-Sovereign Identity**: Users identified by cryptographic keys derived from seed phrases
+- **Decentralized AI**: Multiple AI nodes compete to provide services, users choose their trusted provider
+- **User-Controlled Privacy**: Users can instantly revoke AI access to their data
+- **Hierarchical Encryption**: Folder-based key derivation for granular access control
+
+## User Identity & Authentication
+
+### Seed Phrase Based Identity
+```
+User Registration/Login:
+1. Generate/Enter 12-word BIP39 seed phrase
+2. Derive RSA key pair from seed: RSA_user = HKDF(seed, "auth")
+3. Public key becomes user identifier
+4. Private key stays client-side, never transmitted
+5. User can login from any device with same seed phrase
+```
+
+### Key Derivation Hierarchy
+```
+Seed Phrase (12 words)
+├── Authentication Key: HKDF(seed, "auth") → RSA key pair
+├── Drive Master Key: HKDF(seed, "drive") → Symmetric key
+├── Folder Keys: Encrypt(folder_key, parent_folder_key)
+└── File Keys: Encrypt(file_key, folder_key)
+```
+
+## Storage Architecture
+
+### Hierarchical Encryption Model
+
+**Option A: Recursive Key Hierarchy (Recommended)**
+```
+Root Drive
+├── K_root (derived from seed)
+├── Folder_A/
+│   ├── K_folder_A = Encrypt(random_key, K_root)
+│   ├── File1 = Encrypt(content, K_file1)
+│   ├── K_file1 = Encrypt(random_key, K_folder_A)
+│   └── SubFolder_B/
+│       ├── K_subfolder_B = Encrypt(random_key, K_folder_A)
+│       └── File2 = Encrypt(content, K_file2)
+```
+
+**Option B: Single Drive Key**
+```
+All files encrypted with single K_drive derived from seed
+├── Simpler key management
+├── Faster operations
+├── Less granular sharing capabilities
+```
+
+### Data Storage Components
+
+1. **MinIO Object Storage**
+   - Stores encrypted files and chunks
+   - S3-compatible API
+   - Hierarchical path structure: `user_{id}/folder_{id}/file_{name}`
+
+2. **PostgreSQL Database**
+   - File/folder metadata and hierarchy
+   - User and AI node registry
+   - Encrypted key storage
+   - Chat session tracking
+
+## AI Node Architecture
+
+### AI Node Model
+```
+AI Nodes are autonomous entities similar to blockchain nodes:
+├── Each node has its own RSA key pair (generated at deployment)
+├── Nodes register with the platform for authorization
+├── Users choose their trusted AI node
+├── Nodes compete on performance, reliability, and trust
+├── Open-source implementation allows anyone to run a node
+```
+
+### AI Node Authorization Flow
+```
+1. Node Deployment:
+   ├── Generate RSA key pair at build time
+   ├── Register with platform (submit public key + endpoint)
+   
+2. Platform Authorization:
+   ├── Platform owners verify node legitimacy
+   ├── Add node to authorized list
+   ├── Users can see available nodes
+   
+3. User Selection:
+   ├── User browses available AI nodes
+   ├── Selects trusted node based on reputation/features
+   ├── All AI operations routed to selected node
+```
+
+## AI Processing Workflow
+
+### File AI-Enablement Process
+```
+1. User marks file/folder as "AI-enabled"
+2. Client requests encrypted file from server
+3. Client decrypts file locally using hierarchical keys
+4. Client sends plaintext to chosen AI node over TLS + RSA encryption
+5. AI node processes file:
+   ├── Chunks document (512-1024 token chunks)
+   ├── Generates embeddings using local model
+   ├── Encrypts chunks and embeddings with its own key
+   ├── Sends encrypted data back to server for storage
+6. Server stores encrypted chunks/embeddings
+7. Client receives confirmation
+```
+
+### Security Measures for AI Processing
+```
+Client → AI Node Communication:
+├── TLS 1.3 for transport security
+├── Additional RSA encryption with AI node's public key
+├── Prevents man-in-the-middle attacks
+├── Ensures only intended AI node can decrypt content
+```
+
+## Chat Session Architecture
+
+### Session-Based AI Interaction
+```
+Chat Session Lifecycle:
+1. User initiates chat session
+2. User selects files/folders to include
+3. Server sends encrypted chunks to AI node
+4. AI node decrypts and loads into session memory
+5. Real-time chat via WebSocket connection
+6. Session end → AI node purges all data
+```
+
+### WebSocket Communication Flow
+```
+User ←→ Server ←→ AI Node
+
+Direct WebSocket between User and AI Node:
+├── Session establishment through server
+├── Direct WebSocket connection for low latency
+├── Server provides encrypted chunks at session start
+├── Queries and responses flow directly
+├── Session termination triggers data purge
+```
+
+## Data Flow Diagrams
+
+### File Upload & AI Enablement
+```
+┌─────────────┐    ┌──────────────┐    ┌─────────────┐
+│User Client  │    │   Server     │    │  AI Node    │
+└─────────────┘    └──────────────┘    └─────────────┘
+        │                   │                   │
+        │ 1. Upload file    │                   │
+        │ (encrypted)       │                   │
+        ├──────────────────►│                   │
+        │                   │                   │
+        │ 2. Mark AI-enabled│                   │
+        ├──────────────────►│                   │
+        │                   │                   │
+        │ 3. Request file   │                   │
+        │ (for AI processing)│                   │
+        ├──────────────────►│                   │
+        │                   │                   │
+        │ 4. Encrypted file │                   │
+        │◄──────────────────┤                   │
+        │                   │                   │
+        │ 5. Decrypt locally│                   │
+        │                   │                   │
+        │ 6. Send plaintext │                   │
+        │ (TLS + RSA encrypted)                 │
+        ├──────────────────────────────────────►│
+        │                   │ 7. Process file   │
+        │                   │ (chunk + embed)   │
+        │                   │                   │
+        │                   │ 8. Encrypted      │
+        │                   │ chunks/embeddings │
+        │                   │◄──────────────────┤
+        │                   │                   │
+        │ 9. Processing     │                   │
+        │ complete          │                   │
+        │◄──────────────────┤                   │
+```
+
+### Chat Session Flow
+```
+┌─────────────┐    ┌──────────────┐    ┌─────────────┐
+│User Client  │    │   Server     │    │  AI Node    │
+└─────────────┘    └──────────────┘    └─────────────┘
+        │                   │                   │
+        │ 1. Start chat     │                   │
+        │ (select files)    │                   │
+        ├──────────────────►│                   │
+        │                   │ 2. Send encrypted │
+        │                   │ chunks to AI      │
+        │                   ├──────────────────►│
+        │                   │                   │
+        │                   │ 3. Decrypt &      │
+        │                   │ load in memory    │
+        │                   │                   │
+        │ 4. WebSocket      │                   │
+        │ connection        │                   │
+        ├───────────────────┼──────────────────►│
+        │                   │                   │
+        │ 5. Chat queries   │                   │
+        │◄──────────────────┼──────────────────►│
+        │                   │                   │
+        │ 6. End session    │                   │
+        ├──────────────────►│ 7. Purge AI data │
+        │                   ├──────────────────►│
+```
+
+## Security Model
+
+### Threat Model & Mitigations
+
+**Server Compromise:**
+- ✅ Server cannot decrypt files (no keys)
+- ✅ Server cannot read file contents or names
+- ✅ Server cannot impersonate users (no private keys)
+
+**AI Node Compromise:**
+- ✅ User can instantly revoke access (delete encrypted chunks)
+- ✅ AI node only has access to explicitly shared files
+- ✅ Session-based access with automatic cleanup
+- ✅ Users can switch to different AI nodes
+
+**Client Compromise:**
+- ⚠️ Attacker gains access to user's data during session
+- ✅ Seed phrase backup allows recovery on new device
+- ✅ User can revoke old sessions and start fresh
+
+**Man-in-the-Middle Attacks:**
+- ✅ TLS + RSA double encryption for AI communication
+- ✅ Certificate pinning for AI node authentication
+- ✅ Cryptographic verification of AI node identity
+
+### Privacy Guarantees
+
+1. **Zero-Knowledge Storage**: Server never sees plaintext data
+2. **Selective Disclosure**: Users choose exactly what AI can access
+3. **Temporal Isolation**: AI access is session-based, not permanent
+4. **Revocable Access**: Users can instantly cut off AI access
+5. **Decentralized Trust**: No single point of AI control
+
+## Technology Stack
+
+### Client Applications
+```
+Web + Mobile : Ionic + Capacitor + React
+```
+
+### Server Infrastructure
+```
+API: Django REST Framework
+Database: PostgreSQL with pgvector
+Object Storage: MinIO (S3-compatible)
+Cache: Redis
+Queue: Celery for background processing
+```
+
+### AI Node Stack
+```
+Framework: FastAPI (Python)
+Vector DB: ChromaDB, Pinecone, or Weaviate
+ML Models: Sentence Transformers, OpenAI embeddings
+LLM: Local models or API integration
+WebSocket: Socket.IO or native WebSocket
+```
+
+### Cryptography Libraries
+```
+Seed Phrases: bip39
+Key Derivation: @scure/bip32, @noble/hashes
+RSA Operations: @noble/rsa or Web Crypto API
+Symmetric Encryption: AES-256-GCM via Web Crypto API
+```
+
+## Deployment Architecture
+
+### Production Setup
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│  Load Balancer  │    │   Server Cluster│    │  AI Node Network│
+│                 │    │                 │    │                 │
+│ ├─ HTTPS Term.  │    │ ├─ Django API   │    │ ├─ AI Node 1    │
+│ ├─ Rate Limiting│    │ ├─ PostgreSQL   │    │ ├─ AI Node 2    │
+│ ├─ DDoS Protect│     │ ├─ MinIO        │    │ ├─ AI Node N    │
+│ └─ WebSocket    │    │ └─ Redis        │    │ └─ Health Check │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+### Scalability Considerations
+
+**Storage Scaling:**
+- MinIO scales horizontally across multiple nodes
+- PostgreSQL read replicas for metadata queries
+- CDN for static assets and public content
+
+**AI Node Scaling:**
+- Auto-scaling based on user demand
+- Load balancing across multiple AI nodes
+- Geographic distribution for low latency
+
+**Client Scaling:**
+- Progressive Web App for mobile
+- Local caching for frequently accessed files
+- Optimistic updates for better UX
+
+
+## Security Considerations
+
+### Regular Security Practices
+- Regular security audits of AI node code
+- Penetration testing of API endpoints
+- Code review process for all changes
+- Dependency vulnerability scanning
+
+### Incident Response Plan
+- AI node compromise response
+- User data breach procedures
+- Service availability procedures
+- Communication protocols
+
+## Conclusion
+
+This architecture provides a unique combination of privacy, security, and AI capabilities by:
+- Ensuring users maintain complete control over their data
+- Providing instant revocability of AI access
+- Creating a competitive marketplace of AI services
+- Maintaining zero-knowledge properties at the storage layer
+
+The system is designed to be both secure by default and convenient for users, solving the traditional trade-off between privacy and functionality in cloud storage systems.
