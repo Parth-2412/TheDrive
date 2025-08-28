@@ -167,7 +167,7 @@ Direct WebSocket between User and AI Node:
         ├──────────────────►│                   │
         │                   │                   │
         │ 3. Request file   │                   │
-        │ (for AI processing)│                   │
+        │ for AI processing │                   │
         ├──────────────────►│                   │
         │                   │                   │
         │ 4. Encrypted file │                   │
@@ -214,7 +214,7 @@ Direct WebSocket between User and AI Node:
         │◄──────────────────┼──────────────────►│
         │                   │                   │
         │ 6. End session    │                   │
-        ├──────────────────►│ 7. Purge AI data │
+        ├──────────────────►│ 7. Purge AI data  │
         │                   ├──────────────────►│
 ```
 
@@ -293,7 +293,7 @@ Symmetric Encryption: AES-256-GCM via Web Crypto API
 │                 │    │                 │    │                 │
 │ ├─ HTTPS Term.  │    │ ├─ Django API   │    │ ├─ AI Node 1    │
 │ ├─ Rate Limiting│    │ ├─ PostgreSQL   │    │ ├─ AI Node 2    │
-│ ├─ DDoS Protect│     │ ├─ MinIO        │    │ ├─ AI Node N    │
+│ ├─ DDoS Protect │    │ ├─ MinIO        │    │ ├─ AI Node N    │
 │ └─ WebSocket    │    │ └─ Redis        │    │ └─ Health Check │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
