@@ -145,8 +145,7 @@ class AuthenticationViewSet(viewsets.ViewSet):
         username = data.get('username')
         nonce = data.get('nonce')
         signature = data.get('signature')
-        if not all([username, nonce, signature]):
-            return Response({'error': 'Username, nonce, and signature are required'}, status=400)
+
         
         try:
             user = DriveUser.objects.get(username=username)
