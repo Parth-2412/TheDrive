@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BsCopy, BsFolderPlus, BsGridFill, BsScissors } from "react-icons/bs";
 import { FiRefreshCw } from "react-icons/fi";
+import { TbSparkles } from "react-icons/tb"; 
 import {
   MdClear,
   MdOutlineDelete,
@@ -116,6 +117,26 @@ const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions }) => {
                 <span>{t("download")}</span>
               </button>
             )}
+          {selectedFiles.length === 1 && (
+  <button
+    className="item-action file-action"
+    onClick={() => {
+      setCurrentPathFiles(prev =>
+        prev.map(f =>
+          f.path === selectedFiles[0].path
+            ? { ...f, isAiActive: !f.isAiActive } // toggle
+            : f
+        )
+      );
+    }}
+  >
+    <TbSparkles size={18} />
+    <span>
+      {selectedFiles[0].isAiActive ? "Disable AI Mode" : "Enable AI Mode"}
+    </span>
+  </button>
+)}
+
             {permissions.delete && (
               <button
                 className="item-action file-action"

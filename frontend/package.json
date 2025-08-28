@@ -40,5 +40,8 @@
   "repository": {
     "type": "git",
     "url": "your-repository-url"
+  },
+  "dependencies": {
+    "sass": "^1.91.0"
   }
 }
