@@ -1,10 +1,10 @@
 from django.urls import include, path
 from rest_framework import routers
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
-from .views import AuthenticationViewSet
+from .auth_views import AuthenticationViewSet
 
 router = routers.DefaultRouter()
-router.register('', AuthenticationViewSet, basename='auth')
+router.register('', AuthenticationViewSet, basename='auth',trailing_slash=False)
 
 
 # Wire up our API using automatic URL routing.

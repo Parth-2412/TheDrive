@@ -25,6 +25,10 @@ class NonceResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = AuthNonce
         fields = ['nonce', 'challenge_message', 'expires_at']
+class DriveUserRegisterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AuthNonce
+        fields = ['username', 'public_key']
 
 # 4️⃣ Login Verify Request (send signature)
 class LoginVerifySerializer(serializers.Serializer):
@@ -49,7 +53,7 @@ class AuthenticationViewSet(viewsets.ViewSet):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        request=DriveUserSerializer,
+        request=DriveUserRegisterSerializer,
         responses={201: DriveUserSerializer, 400: OpenApiResponse(description="Validation errors")},
         description="Register a new DriveUser"
     )
