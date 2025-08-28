@@ -1,5 +1,5 @@
 import { FileManager } from "@cubone/react-file-manager";
-import "@cubone/react-file-manager/dist/style.css";
+import "../../../react-file-manager/dist/style.css";
 import { useState } from "react";
 import './Manager.css';
 

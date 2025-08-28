@@ -9,11 +9,10 @@ class DriveUser(models.Model):
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     
-    # Remove username, use RSA public key as identifier
-    username = None
+    username = models.CharField(unique=True,max_length=52, help_text="Username")
     
     # public key derived from seed phrase (user's identity)
-    public_key = models.TextField(unique=True, help_text="RSA public key derived from seed phrase")
+    public_key = models.TextField(unique=True, help_text="ED25519 public key derived from seed phrase")
     
    
     
@@ -47,7 +46,7 @@ class AINode(models.Model):
     name = models.CharField(max_length=255, help_text="Human readable name")
     
     # AI node's RSA key pair (generated at build)
-    public_key = models.TextField(unique=True, help_text="AI node's RSA public key")
+    public_key = models.TextField(unique=True, help_text="AI node's ED25519 public key")
     
     # Network details
     endpoint_url = models.URLField(help_text="AI node's API endpoint")
@@ -78,9 +77,7 @@ class StorageEntity(models.Model):
     
     # Encrypted name (encrypted with parent's key or user's root key)
     name_encrypted = models.BinaryField()
-    
-    # Entity's own encryption key (user's master key)
-    key_encrypted = models.BinaryField()
+
     
     # Storage path
     minio_path = models.TextField()
@@ -135,8 +132,7 @@ class Folder(StorageEntity):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Set help text for inherited fields
-        self._meta.get_field('name_encrypted').help_text = "Folder name encrypted with parent folder's key"
-        self._meta.get_field('key_encrypted').help_text = "This folder's symmetric key encrypted with parent folder's key"
+        self._meta.get_field('name_encrypted').help_text = "Folder name encrypted with drive mastery key"
         self._meta.get_field('minio_path').help_text = "Full folder path for fast hierarchical queries"
         self._meta.get_field('ai_enabled').help_text = "Whether files in this folder are AI-searchable"
 
@@ -168,6 +164,8 @@ class File(StorageEntity):
         help_text="SHA-256 hash of encrypted file for integrity"
     )
     
+    # File's own encryption key (user's master key)
+    key_encrypted = models.BinaryField(help_text = "This file's symmetric key encrypted with the drive master key")
     class Meta:
         db_table = 'files'
         indexes = [
@@ -179,8 +177,7 @@ class File(StorageEntity):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Set help text for inherited fields
-        self._meta.get_field('name_encrypted').help_text = "Original filename encrypted with folder key"
-        self._meta.get_field('key_encrypted').help_text = "This file's symmetric key encrypted with folder key"
+        self._meta.get_field('name_encrypted').help_text = "Original filename encrypted with drive master key"
         self._meta.get_field('minio_path').help_text = "Path in MinIO object storage"
         self._meta.get_field('ai_enabled').help_text = "Whether this file is AI-searchable"
     
@@ -190,7 +187,7 @@ class DocumentChunk(models.Model):
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     
-    chunk_content_encrypted = models.BinaryField(help_text="Chunk content encrypted with AI node's public key")
+    chunk_content_encrypted = models.BinaryField(help_text="Chunk content encrypted by the AI node")
     
     order_in_file = models.PositiveBigIntegerField(help_text="Order of the chunk in the file")
 
@@ -198,7 +195,7 @@ class DocumentChunk(models.Model):
     file = models.ForeignKey(File, on_delete=models.CASCADE, help_text="The file the chunk belongs to")
 
     # Encrypted embedding vector (encrypted with AI node's public key)
-    embedding_encrypted = models.BinaryField(help_text="Vector embedding encrypted with AI node's public key")
+    embedding_encrypted = models.BinaryField(help_text="Vector embedding encrypted by the AI node")
     
     # Embedding metadata
     ai_node = models.ForeignKey(AINode, on_delete=models.CASCADE)

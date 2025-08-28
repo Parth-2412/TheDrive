@@ -1,5 +1,4 @@
 *.env
 __pycache__
 *.sqlite3
-react-file-manager/
 node_modules/
