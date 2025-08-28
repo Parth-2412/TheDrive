@@ -1,0 +1,14 @@
+.bread-crumb-container .breadcrumb {
+    --breadcrumb-height : 48px;
+    height: var(--breadcrumb-height) !important;
+    min-height: var(--breadcrumb-height) !important;
+    max-height: var(--breadcrumb-height) !important;
+}
+
+
+.navigation-pane {
+    /* display: none !important; */
+    opacity: 0;
+    max-width: 0px;
+
+}
