@@ -2,40 +2,73 @@
 # models.py
 import uuid
 from django.db import models
+import secrets
+from datetime import timedelta
+from django.utils import timezone
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+    
 
-class DriveUser(models.Model):
-    """
-    Custom user model identified by seed phrase
-    """
+class DriveUserManager(BaseUserManager):
+    def create_user(self, public_key, username=None, password=None, **extra_fields):
+        if not public_key:
+            raise ValueError("Users must have a public key")
+        if not username:
+            raise ValueError("Users must have a username")
+
+        user = self.model(public_key=public_key, username=username, **extra_fields)
+
+        # For normal users → no password
+        if password:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
+
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, public_key, username=None, password=None, **extra_fields):
+        extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_superuser", True)
+
+        if not password:
+            raise ValueError("Superusers must have a password")
+
+        return self.create_user(public_key, username=username, password=password, **extra_fields)
+
+
+class DriveUser(AbstractBaseUser, PermissionsMixin):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    
-    username = models.CharField(unique=True,max_length=52, help_text="Username")
-    
-    # public key derived from seed phrase (user's identity)
-    public_key = models.TextField(unique=True, help_text="ED25519 public key derived from seed phrase")
-    
-   
-    
-    # DriveUser preferences
+
+    public_key = models.TextField(unique=True)
+    username = models.CharField(unique=True, max_length=255)
+
     preferred_ai_node = models.ForeignKey(
-        'AINode', 
-        on_delete=models.SET_NULL, 
-        null=True, blank=True,
-        help_text="DriveUser's preferred AI node for queries"
+        "AINode",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
     )
-    
-    storage_used = models.BigIntegerField(default=0, help_text="Storage used in bytes")
-    
+
+    storage_used = models.BigIntegerField(default=0)
+
     created_at = models.DateTimeField(auto_now_add=True)
     last_login = models.DateTimeField(auto_now=True)
-    
-    USERNAME_FIELD = 'public_key'
-    REQUIRED_FIELDS = []
 
-   
+    is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
+
+    USERNAME_FIELD = "username"   # admin login via username
+    REQUIRED_FIELDS = ["public_key"]
+
+    objects = DriveUserManager()
+
     class Meta:
-        db_table = 'drive_users'
+        db_table = "drive_users"
 
+    def __str__(self):
+        return self.username
+
+    
 
 class AINode(models.Model):
     """
@@ -208,3 +241,27 @@ class DocumentChunk(models.Model):
         db_table = 'document_chunk'
         indexes = []
 
+class AuthNonce(models.Model):
+    """Nonce for authentication challenges"""
+    user = models.ForeignKey('DriveUser', on_delete=models.CASCADE, related_name='nonces')
+    nonce = models.CharField(max_length=64, unique=True)
+    challenge_message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['nonce']),
+            models.Index(fields=['expires_at']),
+        ]
+    
+    def save(self, *args, **kwargs):
+        if not self.nonce:
+            self.nonce = secrets.token_hex(32)
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timedelta(minutes=5)  # 5 min expiry
+        super().save(*args, **kwargs)
+    
+    def is_valid(self):
+        return not self.used and timezone.now() < self.expires_at
