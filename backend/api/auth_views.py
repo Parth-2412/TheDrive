@@ -17,11 +17,10 @@ from rest_framework.permissions import AllowAny
 
 
 # 2️⃣ Login Request (request a nonce)
-class DriveUserRegisterSerializer(serializers.ModelSerializer):
+class LoginRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = DriveUser
         fields = ['username']
-
 
 # 3️⃣ Nonce Response
 class NonceResponseSerializer(serializers.ModelSerializer):
