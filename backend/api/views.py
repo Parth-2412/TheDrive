@@ -158,9 +158,6 @@ class AuthenticationViewSet(viewsets.ViewSet):
         access_token = refresh.access_token
 
         return Response({
-            'message': 'Authentication successful',
             'access_token': str(access_token),
             'refresh_token': str(refresh),
-            'user_id': str(user.id),
-            'username': user.username
         }, status=200)
