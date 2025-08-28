@@ -31,15 +31,13 @@ User Registration/Login:
 Seed Phrase (12 words)
 ├── Authentication Key: HKDF(seed, "auth") → Assymetric key pair
 ├── Drive Master Key: HKDF(seed, "drive") → Symmetric key
-├── Folder Keys: Encrypt(folder_key, master_key)
-└── File Keys: Encrypt(file_key, master_key)
+├── Folder Keys: Encrypt(folder_key, drive_master_key)
+└── File Keys: Encrypt(file_key, drive_master_key)
 ```
 
 ## Storage Architecture
 
 ### Encryption Model
-
-**Option A: Recursive Key Hierarchy (Recommended)**
 ```
 All files encrypted with a unique key and is stored on the server by encrypting it with the user's master key (or the master drive key)
 ```
