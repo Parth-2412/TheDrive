@@ -13,9 +13,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from .crypto import verify_signature
 from rest_framework.permissions import AllowAny
 from drf_spectacular.utils import extend_schema, OpenApiResponse
-from drf_spectacular.types import OpenApiTypes
 from rest_framework.permissions import AllowAny
-from drf_spectacular.plumbing import build_object_type
 
 
 # 2️⃣ Login Request (request a nonce)
