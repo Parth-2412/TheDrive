@@ -112,7 +112,7 @@ class AuthenticationViewSet(viewsets.ViewSet):
         # Generate nonce
         nonce = secrets.token_hex(32)
         timestamp = int(timezone.now().timestamp())
-        challenge_message = f"Sign this message to authenticate:\nNonce: {nonce}\nTimestamp: {timestamp}\nUsername: {username}"
+        challenge_message = f"{nonce};{timestamp};{username}"
         
         auth_nonce = AuthNonce.objects.create(
             user=user,
