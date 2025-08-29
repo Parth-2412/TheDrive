@@ -13,20 +13,24 @@ from rest_framework_simplejwt.exceptions import TokenError
 from .crypto import verify_signature
 from rest_framework.permissions import AllowAny
 from drf_spectacular.utils import extend_schema, OpenApiResponse
-from drf_spectacular.types import OpenApiTypes
 from rest_framework.permissions import AllowAny
-from drf_spectacular.plumbing import build_object_type
-
 
 # 2️⃣ Login Request (request a nonce)
-class LoginRequestSerializer(serializers.Serializer):
-    username = serializers.CharField(help_text="The username of the DriveUser")
+class LoginRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DriveUser
+        fields = []
+        read_only_fields = ['username']
 
 # 3️⃣ Nonce Response
 class NonceResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = AuthNonce
         fields = ['nonce', 'challenge_message', 'expires_at']
+class DriveUserRegisterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DriveUser
+        fields = ['username', 'public_key']
 
 # 4️⃣ Login Verify Request (send signature)
 class LoginVerifySerializer(serializers.Serializer):
@@ -51,7 +55,7 @@ class AuthenticationViewSet(viewsets.ViewSet):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        request=DriveUserSerializer,
+        request=DriveUserRegisterSerializer,
         responses={201: DriveUserSerializer, 400: OpenApiResponse(description="Validation errors")},
         description="Register a new DriveUser"
     )
@@ -74,9 +78,12 @@ class AuthenticationViewSet(viewsets.ViewSet):
     )
     @action(detail=False, methods=['post'], url_path='token/refresh')
     def token_refresh(self, request):
-        refresh_token = request.data.get('refresh_token')
-        if not refresh_token:
-            return Response({'error': 'Refresh token required'}, status=400)
+        data = JSONParser().parse(request)
+        serializer = TokenRefreshSerializer(data=data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)  
+        refresh_token = data.get('refresh_token')
+
         
         try:
             refresh = RefreshToken(refresh_token)
@@ -96,10 +103,12 @@ class AuthenticationViewSet(viewsets.ViewSet):
     )
     @action(detail=False, methods=['post'], url_path='login/request')
     def login_request(self, request):
+        print("FUCKKK")
         data = JSONParser().parse(request)
+        serializer = LoginRequestSerializer(data=data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)  
         username = data.get('username')
-        if not username:
-            return Response({'error': 'Username is required'}, status=400)
         
         try:
             user = DriveUser.objects.get(username=username)
@@ -131,11 +140,13 @@ class AuthenticationViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['post'], url_path='login/verify')
     def login_verify(self, request):
         data = JSONParser().parse(request)
+        serializer = LoginVerifySerializer(data=data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)  
         username = data.get('username')
         nonce = data.get('nonce')
         signature = data.get('signature')
-        if not all([username, nonce, signature]):
-            return Response({'error': 'Username, nonce, and signature are required'}, status=400)
+
         
         try:
             user = DriveUser.objects.get(username=username)
