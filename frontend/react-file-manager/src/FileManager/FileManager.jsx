@@ -5,7 +5,7 @@ import BreadCrumb from "./BreadCrumb/BreadCrumb";
 import FileList from "./FileList/FileList";
 import Actions from "./Actions/Actions";
 import { FilesProvider } from "../contexts/FilesContext";
-import { FileNavigationProvider } from "../contexts/FileNavigationContext";
+import { FileNavigationProvider, useFileNavigation } from "../contexts/FileNavigationContext";
 import { SelectionProvider } from "../contexts/SelectionContext";
 import { ClipBoardProvider } from "../contexts/ClipboardContext";
 import { LayoutProvider } from "../contexts/LayoutContext";
@@ -14,7 +14,7 @@ import { useColumnResize } from "../hooks/useColumnResize";
 import PropTypes from "prop-types";
 import { dateStringValidator, urlValidator } from "../validators/propValidators";
 import { TranslationProvider } from "../contexts/TranslationProvider";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { defaultPermissions } from "../constants";
 import "./FileManager.scss";
 
@@ -22,6 +22,7 @@ const FileManager = ({
   files,
   fileUploadConfig,
   isLoading,
+  onNavChange,
   onCreateFolder,
   onFileUploading = () => {},
   onFileUploaded = () => {},
@@ -64,7 +65,7 @@ const FileManager = ({
     height,
     width,
   };
-
+  
   const permissions = useMemo(
     () => ({ ...defaultPermissions, ...userPermissions }),
     [userPermissions]
@@ -84,6 +85,7 @@ const FileManager = ({
                     onRefresh={onRefresh}
                     triggerAction={triggerAction}
                     permissions={permissions}
+                    onNavChange={onNavChange}
                   />
                   <section
                     ref={containerRef}

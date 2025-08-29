@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { IonContent, IonPage, IonInput, IonButton, IonText } from '@ionic/react';
+import { IonContent, IonPage, IonInput, IonButton, IonText, IonSpinner } from '@ionic/react';
 import { deriveAuthKeypair, deriveMasterKeyBytes } from '../services/crypto.service';
 import axios from 'axios';
 import { signMessage } from '../services/auth.service';
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 import { stringToUint8Array, uint8ArrayToString } from '../services/helpers.service';
+import axiosInstance from '../services/api.service';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
@@ -15,113 +16,241 @@ const LoginPage: React.FC = () => {
   const [challengeMessage, setChallengeMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [pvtKey, setPvtKey] = useState<Uint8Array>();
-  const [isKeysStored, setIsKeysStored] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [needsCredentials, setNeedsCredentials] = useState<boolean>(false);
 
-  // Check if keys are stored when component mounts
+  // Check authentication status on component mount
   useEffect(() => {
-    const checkStoredKeys = async () => {
-      try {
-        const storedPvt = await SecureStoragePlugin.get({ key: 'privateKey' });
-        const storedPub = await SecureStoragePlugin.get({ key: 'publicKey' });
-        const storedmas = await SecureStoragePlugin.get({ key: 'masterKey' });
-
-        if (storedPvt.value && storedPub.value && storedmas.value) {
-          setIsKeysStored(true); // Keys are already stored
-          setPvtKey(stringToUint8Array(storedPvt.value)); // Store private key
-        }
-      } catch (err) {
-        setIsKeysStored(false); // No keys found
-      }
-    };
-    checkStoredKeys();
+    checkAuthenticationStatus();
   }, []);
 
-  const handleLogin = async () => {
+  const checkAuthenticationStatus = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Check if tokens exist
+      const accessToken = localStorage.getItem('access_token');
+      const refreshToken = localStorage.getItem('refresh_token');
+
+      if (accessToken && refreshToken) {
+        // Tokens exist, user is already authenticated
+        setIsAuthenticated(true);
+        setSuccessMessage('Already logged in!');
+        setLoading(false);
+        return;
+      }
+
+      // No tokens, check if keys exist in storage
+      const storedPvt = await SecureStoragePlugin.get({ key: 'privateKey' });
+      const storedPub = await SecureStoragePlugin.get({ key: 'publicKey' });
+      const storedMas = await SecureStoragePlugin.get({ key: 'masterKey' });
+
+      if (storedPvt.value && storedPub.value && storedMas.value) {
+        // Keys exist, try to get username and perform automatic login
+        const storedUsername = localStorage.getItem('username');
+        if (storedUsername) {
+          setUsername(storedUsername);
+          await performLoginWithStoredKeys(storedUsername, storedPvt.value, storedPub.value, storedMas.value);
+        } else {
+          // Keys exist but no username, prompt for username only
+          setNeedsCredentials(true);
+          setError('Please enter your username to continue');
+        }
+      } else {
+        // No keys, need full credentials
+        setNeedsCredentials(true);
+      }
+    } catch (err) {
+      console.error('Error checking authentication status:', err);
+      setNeedsCredentials(true);
+    }
+
+    setLoading(false);
+  };
+
+  const performLoginWithStoredKeys = async (
+    usernameToUse: string,
+    privateKeyStr: string,
+    publicKeyStr: string,
+    masterKeyStr: string
+  ) => {
+    try {
+      // Step 1: Get nonce and challenge
+      const response = await axiosInstance.post(`/api/auth/login/request`, { 
+        username: usernameToUse 
+      });
+      const { nonce, challenge_message } = response.data;
+      setChallengeMessage(challenge_message);
+
+      // Step 2: Use stored keys
+      const privateKey = stringToUint8Array(privateKeyStr);
+      const publicKey = stringToUint8Array(publicKeyStr);
+      const masterKey = stringToUint8Array(masterKeyStr);
+
+      // Step 3: Sign the challenge
+      const signedNonce = await signMessage(challenge_message, privateKey);
+
+      // Step 4: Verify with server
+      const verifyResponse = await axiosInstance.post(`/api/auth/login/verify`, {
+        username: usernameToUse,
+        nonce,
+        signature: signedNonce,
+      });
+
+      const { access_token, refresh_token } = verifyResponse.data;
+
+      if (access_token && refresh_token) {
+        localStorage.setItem('access_token', access_token);
+        localStorage.setItem('refresh_token', refresh_token);
+        localStorage.setItem('username', usernameToUse); // Store username for future use
+        setIsAuthenticated(true);
+        setSuccessMessage('Login successful!');
+      } else {
+        setError('Authentication failed.');
+        setNeedsCredentials(true);
+      }
+    } catch (err: any) {
+      console.error('Login error:', err);
+      if (err?.response?.status === 404) {
+        setError('User not found.');
+      } else {
+        setError(err.message || 'Login failed.');
+      }
+      setNeedsCredentials(true);
+    }
+  };
+
+  const handleManualLogin = async () => {
     setError(null);
     setSuccessMessage(null);
+    setLoading(true);
 
     if (!username) {
       setError('Username is required');
+      setLoading(false);
       return;
     }
 
     try {
-    //   Step 1: Send request to get nonce + challenge
-      const response = await axios.post(`${BACKEND_URL}/api/auth/login/request/`, { username });
+      // Step 1: Get nonce and challenge
+      const response = await axiosInstance.post(`/api/auth/login/request`, { username });
       const { nonce, challenge_message } = response.data;
       setChallengeMessage(challenge_message);
 
       let privateKey: Uint8Array;
       let publicKey: Uint8Array;
       let masterKey: Uint8Array;
-      // Step 2: Check if keys are stored, otherwise ask for mnemonic + password
-      if (isKeysStored) {
-        // Keys are already stored in SecureStorage
-        privateKey = pvtKey as Uint8Array;
+
+      // Step 2: Try to get keys from storage first
+      try {
+        const storedPvt = await SecureStoragePlugin.get({ key: 'privateKey' });
         const storedPub = await SecureStoragePlugin.get({ key: 'publicKey' });
-        console.log("adf")
-        const storedmas = await SecureStoragePlugin.get({ key: 'masterKey' });
-        publicKey = stringToUint8Array(storedPub.value);
-        masterKey = stringToUint8Array(storedmas.value)
-      } else {
-        // Derive keys from mnemonic/password
+        const storedMas = await SecureStoragePlugin.get({ key: 'masterKey' });
+
+        if (storedPvt.value && storedPub.value && storedMas.value) {
+          // Use stored keys
+          privateKey = stringToUint8Array(storedPvt.value);
+          publicKey = stringToUint8Array(storedPub.value);
+          masterKey = stringToUint8Array(storedMas.value);
+        } else {
+          throw new Error('No stored keys found');
+        }
+      } catch (storageError) {
+        // No stored keys, derive from mnemonic/password
         if (!mnemonic || !password) {
           setError('Mnemonic and password are required');
+          setLoading(false);
           return;
         }
 
-        // Derive keypair
         const derived = await deriveAuthKeypair(mnemonic, password);
         privateKey = derived.secretKey;
         publicKey = derived.publicKey;
         masterKey = await deriveMasterKeyBytes(mnemonic, password);
-        // Store keys securely for future use
-    }
-    
-    // Step 3: Sign the challenge message
-    const signedNonce = await signMessage(challenge_message, privateKey);
-    
-    // Step 4: Send signed nonce + public key to server
-    const verifyResponse = await axios.post(`${BACKEND_URL}/api/auth/login/verify/`, {
+      }
+
+      // Step 3: Sign the challenge
+      const signedNonce = await signMessage(challenge_message, privateKey);
+
+      // Step 4: Verify with server
+      const verifyResponse = await axiosInstance.post(`/api/auth/login/verify`, {
         username,
         nonce,
         signature: signedNonce,
-    });
-    
-    const { access_token, refresh_token } = verifyResponse.data;
-    
-    if (access_token && refresh_token) {
+      });
+
+      const { access_token, refresh_token } = verifyResponse.data;
+
+      if (access_token && refresh_token) {
+        // Store tokens
         localStorage.setItem('access_token', access_token);
         localStorage.setItem('refresh_token', refresh_token);
+        localStorage.setItem('username', username);
+
+        // Store keys securely
         await SecureStoragePlugin.set({ key: 'privateKey', value: uint8ArrayToString(privateKey) });
         await SecureStoragePlugin.set({ key: 'publicKey', value: uint8ArrayToString(publicKey) });
         await SecureStoragePlugin.set({ key: 'masterKey', value: uint8ArrayToString(masterKey) });
+
+        setIsAuthenticated(true);
         setSuccessMessage('Login successful!');
       } else {
-        setError('Invalid nonce signature.');
+        setError('Authentication failed.');
       }
     } catch (err: any) {
+      console.error('Login error:', err);
       if (err?.response?.status === 404) {
         setError('User not found.');
       } else {
-        console.error(err);
-        setError(err.message || 'Unexpected error occurred.');
+        setError(err.message || 'Login failed.');
       }
     }
+
+    setLoading(false);
   };
 
-  if (isKeysStored) {
+  // Show loading spinner while checking authentication
+  if (loading) {
     return (
       <IonPage>
-        <IonContent className="ion-padding">
-          <h1>Login Successful!</h1>
-          <IonText color="success"><p>{successMessage}</p></IonText>
+        <IonContent className="ion-padding ion-text-center">
+          <IonSpinner name="circular" />
+          <IonText><p>Checking authentication...</p></IonText>
         </IonContent>
       </IonPage>
     );
   }
 
+  // Show success page if authenticated
+  if (isAuthenticated) {
+    return (
+      <IonPage>
+        <IonContent className="ion-padding">
+          <h1>Welcome!</h1>
+          <IonText color="success">
+            <p>{successMessage}</p>
+          </IonText>
+          <IonButton 
+            expand="full" 
+            fill="outline" 
+            onClick={() => {
+              localStorage.removeItem('access_token');
+              localStorage.removeItem('refresh_token');
+              localStorage.removeItem('username');
+              setIsAuthenticated(false);
+              setNeedsCredentials(true);
+            }}
+          >
+            Logout
+          </IonButton>
+        </IonContent>
+      </IonPage>
+    );
+  }
+
+  // Show login form if credentials are needed
   return (
     <IonPage>
       <IonContent className="ion-padding">
@@ -133,27 +262,27 @@ const LoginPage: React.FC = () => {
           onIonChange={(e) => setUsername(e.detail.value!)}
         />
 
+        {/* Only show mnemonic/password fields if we don't have stored keys */}
         <IonInput
           value={mnemonic}
-          placeholder="Enter your mnemonic"
+          placeholder="Enter your mnemonic (if first time login)"
           onIonChange={(e) => setMnemonic(e.detail.value!)}
         />
 
         <IonInput
           value={password}
-          placeholder="Enter your password"
+          placeholder="Enter your password (if first time login)"
           onIonChange={(e) => setPassword(e.detail.value!)}
           type="password"
         />
 
-        <IonButton onClick={handleLogin} expand="full">
-          Login
+        <IonButton onClick={handleManualLogin} expand="full" disabled={loading}>
+          {loading ? <IonSpinner name="circular" /> : 'Login'}
         </IonButton>
 
         {error && <IonText color="danger"><p>{error}</p></IonText>}
         {successMessage && <IonText color="success"><p>{successMessage}</p></IonText>}
-
-        {challengeMessage && <IonText color="primary"><p>{challengeMessage}</p></IonText>}
+        {challengeMessage && <IonText color="primary"><p>Challenge: {challengeMessage}</p></IonText>}
       </IonContent>
     </IonPage>
   );

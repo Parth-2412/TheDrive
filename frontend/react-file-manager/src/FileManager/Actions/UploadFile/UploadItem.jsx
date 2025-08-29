@@ -106,35 +106,35 @@ const UploadItem = ({
       for (let key in headers) {
         xhr.setRequestHeader(key, headers[key]);
       }
-      console.log(masterAesKey)
-      encryptFile(fileData.file, masterAesKey)
-        .then((encryptedData) => {
-          const payload = {
-          ciphertext: encryptedData.ciphertext,
-          file_iv: encryptedData.file_iv,
-          wrapped_key: encryptedData.wrapped_key,
-          wrap_iv: encryptedData.wrap_iv,
-          filename: encryptedData.filename,
-          mime: encryptedData.mime,
-          };
-          const jsonData = JSON.stringify(payload);
+      // console.log(masterAesKey)
+      // encryptFile(fileData.file, masterAesKey)
+      //   .then((encryptedData) => {
+      //     const payload = {
+      //     ciphertext: encryptedData.ciphertext,
+      //     file_iv: encryptedData.file_iv,
+      //     wrapped_key: encryptedData.wrapped_key,
+      //     wrap_iv: encryptedData.wrap_iv,
+      //     filename: encryptedData.filename,
+      //     mime: encryptedData.mime,
+      //     };
+      //     const jsonData = JSON.stringify(payload);
 
-          xhr.send(jsonData);
-        })
-        .catch((error) => {
-          reject(error);
-          handleUploadError(xhr);
-        })
+      //     xhr.send(jsonData);
+      //   })
+      //   .catch((error) => {
+      //     reject(error);
+      //     handleUploadError(xhr);
+      //   })
       
 
-      // const formData = new FormData();
-      // const appendData = fileData?.appendData;
-      // for (let key in appendData) {
-      //   appendData[key] && formData.append(key, appendData[key]);
-      // }
-      // formData.append("file", fileData.file);
+      const formData = new FormData();
+      const appendData = fileData?.appendData;
+      for (let key in appendData) {
+        appendData[key] && formData.append(key, appendData[key]);
+      }
+      formData.append("file", fileData.file);
 
-      // xhr.send(formData);
+      xhr.send(formData);
     });
   };
 

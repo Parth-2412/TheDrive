@@ -7,6 +7,7 @@ import { Buffer } from 'buffer';
 import axios from 'axios';
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 import { stringToUint8Array, uint8ArrayToString } from '../services/helpers.service';
+import axiosInstance from '../services/api.service';
 window.Buffer = Buffer;
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
 const RegisterPage: React.FC = () => {
@@ -64,7 +65,7 @@ const RegisterPage: React.FC = () => {
       SecureStoragePlugin.set({key: "masterKey", value: uint8ArrayToString(derivedMasterKey)})
 
       // Step 1: Send a POST request to the server to register the user with the public key
-      const response = await axios.post(`${BACKEND_URL}/api/auth/register/`, {
+      const response = await axiosInstance.post(`/api/auth/register`, {
         username,
         public_key: Buffer.from(pk).toString('hex')  // Convert public key to a hex string before sending
       });

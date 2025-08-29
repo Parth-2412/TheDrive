@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { BsCopy, BsFolderPlus, BsGridFill, BsScissors } from "react-icons/bs";
 import { FiRefreshCw } from "react-icons/fi";
 import {
@@ -18,14 +18,17 @@ import { validateApiCallback } from "../../utils/validateApiCallback";
 import { useTranslation } from "../../contexts/TranslationProvider";
 import "./Toolbar.scss";
 
-const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions }) => {
+const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions, onNavChange }) => {
   const [showToggleViewMenu, setShowToggleViewMenu] = useState(false);
-  const { currentFolder } = useFileNavigation();
+  const navData = useFileNavigation();
   const { selectedFiles, setSelectedFiles, handleDownload } = useSelection();
   const { clipBoard, setClipBoard, handleCutCopy, handlePasting } = useClipBoard();
   const { activeLayout } = useLayout();
   const t = useTranslation();
-
+  const { currentFolder } = navData;
+  useEffect(() => {
+      onNavChange(navData)
+    }, [navData])
   // Toolbar Items
   const toolbarLeftItems = [
     {

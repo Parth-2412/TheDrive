@@ -55,8 +55,9 @@ class FolderSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def validate_parent(self, value):
-        if value == None:
-            return value
+        if value == 'root':
+            return None
+        
         if value:
             request = self.context.get('request')
             if not Folder.objects.filter(id=value, user=request.user).exists():
