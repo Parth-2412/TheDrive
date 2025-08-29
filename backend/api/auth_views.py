@@ -15,12 +15,12 @@ from rest_framework.permissions import AllowAny
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from rest_framework.permissions import AllowAny
 
-
 # 2️⃣ Login Request (request a nonce)
 class LoginRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = DriveUser
-        fields = ['username']
+        fields = []
+        read_only_fields = ['username']
 
 # 3️⃣ Nonce Response
 class NonceResponseSerializer(serializers.ModelSerializer):
@@ -103,6 +103,7 @@ class AuthenticationViewSet(viewsets.ViewSet):
     )
     @action(detail=False, methods=['post'], url_path='login/request')
     def login_request(self, request):
+        print("FUCKKK")
         data = JSONParser().parse(request)
         serializer = LoginRequestSerializer(data=data)
         if not serializer.is_valid():
