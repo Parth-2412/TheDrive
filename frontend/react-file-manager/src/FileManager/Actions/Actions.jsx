@@ -19,6 +19,7 @@ const Actions = ({
   acceptedFileTypes,
   triggerAction,
   permissions,
+  masterAesKey
 }) => {
   const [activeAction, setActiveAction] = useState(null);
   const { selectedFiles } = useSelection();
@@ -37,6 +38,7 @@ const Actions = ({
           acceptedFileTypes={acceptedFileTypes}
           onFileUploading={onFileUploading}
           onFileUploaded={onFileUploaded}
+          masterAesKey={masterAesKey}
         />
       ),
       width: "35%",

@@ -1,13 +1,15 @@
-import { FileManager } from "@cubone/react-file-manager";
+import FileManager from "../../../react-file-manager/src/FileManager";
 import "../../../react-file-manager/dist/style.css";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import './Manager.css';
+import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
+import { importAesKey } from "../services/crypto.service";
+import { actualstringToUint8Array, stringToUint8Array } from "../services/helpers.service";
 
 
 
 const Manager: React.FC = () => {
 
-  
     const [files, setFiles] = useState([
         {
           name: "Documents",
@@ -29,8 +31,26 @@ const Manager: React.FC = () => {
           size: 2048,
         },
       ]);
+
+  const [masterAesKey, setMasterAesKey] = useState<CryptoKey | null>(null);
+
+  useEffect(() => {
+    const fetchMasterKey = async () => {
+      try {
+        const { value } = await SecureStoragePlugin.get({ key: "masterKey" });
+        // console.log(value)
+        const master = await importAesKey(stringToUint8Array(value));
+        setMasterAesKey(master);
+      } catch (error) {
+        console.error("Failed to get master key:", error);
+      }
+    };
+
+    fetchMasterKey();
+  }, []);
+
     return (
-       <FileManager files={files}/> 
+       <FileManager files={files} masterAesKey={masterAesKey}/> 
     );
 };
 

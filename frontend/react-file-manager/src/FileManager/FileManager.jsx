@@ -52,6 +52,7 @@ const FileManager = ({
   permissions: userPermissions = {},
   collapsibleNav = false,
   defaultNavExpanded = true,
+  masterAesKey
 }) => {
   const [isNavigationPaneOpen, setNavigationPaneOpen] = useState(defaultNavExpanded);
   const triggerAction = useTriggerAction();
@@ -136,6 +137,7 @@ const FileManager = ({
                     acceptedFileTypes={acceptedFileTypes}
                     triggerAction={triggerAction}
                     permissions={permissions}
+                    masterAesKey={masterAesKey}
                   />
                 </LayoutProvider>
               </ClipBoardProvider>

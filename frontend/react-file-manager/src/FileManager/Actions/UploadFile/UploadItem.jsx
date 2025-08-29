@@ -9,7 +9,7 @@ import { FaRegCheckCircle } from "react-icons/fa";
 import { IoMdRefresh } from "react-icons/io";
 import { useFiles } from "../../../contexts/FilesContext";
 import { useTranslation } from "../../../contexts/TranslationProvider";
-
+import encryptFile from '../../../../../app/src/services/encrypt.service'
 const UploadItem = ({
   index,
   fileData,
@@ -18,6 +18,7 @@ const UploadItem = ({
   fileUploadConfig,
   onFileUploaded,
   handleFileRemove,
+  masterAesKey
 }) => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploaded, setIsUploaded] = useState(false);
@@ -105,15 +106,35 @@ const UploadItem = ({
       for (let key in headers) {
         xhr.setRequestHeader(key, headers[key]);
       }
+      console.log(masterAesKey)
+      encryptFile(fileData.file, masterAesKey)
+        .then((encryptedData) => {
+          const payload = {
+          ciphertext: encryptedData.ciphertext,
+          file_iv: encryptedData.file_iv,
+          wrapped_key: encryptedData.wrapped_key,
+          wrap_iv: encryptedData.wrap_iv,
+          filename: encryptedData.filename,
+          mime: encryptedData.mime,
+          };
+          const jsonData = JSON.stringify(payload);
 
-      const formData = new FormData();
-      const appendData = fileData?.appendData;
-      for (let key in appendData) {
-        appendData[key] && formData.append(key, appendData[key]);
-      }
-      formData.append("file", fileData.file);
+          xhr.send(jsonData);
+        })
+        .catch((error) => {
+          reject(error);
+          handleUploadError(xhr);
+        })
+      
 
-      xhr.send(formData);
+      // const formData = new FormData();
+      // const appendData = fileData?.appendData;
+      // for (let key in appendData) {
+      //   appendData[key] && formData.append(key, appendData[key]);
+      // }
+      // formData.append("file", fileData.file);
+
+      // xhr.send(formData);
     });
   };
 

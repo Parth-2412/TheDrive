@@ -16,6 +16,7 @@ const UploadFileAction = ({
   acceptedFileTypes,
   onFileUploading,
   onFileUploaded,
+  masterAesKey
 }) => {
   const [files, setFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -153,6 +154,7 @@ const UploadFileAction = ({
                 setIsUploading={setIsUploading}
                 onFileUploaded={onFileUploaded}
                 handleFileRemove={handleFileRemove}
+                masterAesKey={masterAesKey}
               />
             ))}
           </ul>
