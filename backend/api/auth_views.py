@@ -28,6 +28,7 @@ class NonceResponseSerializer(serializers.ModelSerializer):
         model = AuthNonce
         fields = ['nonce', 'challenge_message', 'expires_at']
 class DriveUserRegisterSerializer(serializers.ModelSerializer):
+    # signature = serializers.CharField()
     class Meta:
         model = DriveUser
         fields = ['username', 'public_key']
