@@ -14,7 +14,7 @@ urlpatterns = [
     path('schema/', SpectacularAPIView.as_view(), name='schema'),
     path('schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('folders/', file_views.create_folder, name='create_folder'),
-    path('folders/<uuid:folder_id>/', file_views.list_folder_contents, name='list_folder_contents'),
+    path('folders/<folder_id>/', file_views.list_folder_contents, name='list_folder_contents'),
     path('folders/<uuid:folder_id>/rename/', file_views.rename_folder, name='rename_folder'),
     path('folders/<uuid:folder_id>/delete/', file_views.delete_folder, name='delete_folder'),
     

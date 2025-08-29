@@ -238,10 +238,12 @@ def create_folder(request):
 @api_view(['GET'])
 def list_folder_contents(request, folder_id):
     """List contents of a folder"""
-    folder = get_object_or_404(Folder, id=folder_id, user=request.user)
-    
-    subfolders = Folder.objects.filter(parent=folder).order_by('created_at')
-    files = File.objects.filter(folder=folder).order_by('created_at')
+    # folder = get_object_or_404(Folder, id=folder_id, user=request.user)
+    check = None
+    check = None if folder_id == 'root' else get_object_or_404(Folder, id=folder_id, user=request.user)
+
+    subfolders = Folder.objects.filter(parent=check).order_by('created_at')
+    files = File.objects.filter(folder=check).order_by('created_at')
     
     data = {
         'folders': FolderSerializer(subfolders, many=True, context={'request': request}).data,

@@ -31,7 +31,7 @@ const Manager: React.FC = () => {
     const fetchRootFiles = async () => {
       try {
         const authToken = localStorage.getItem('access_token');  // Get the auth token from local storage
-        const response = await fetch(`${BACKEND_URL}/api/folders/null/`, {
+        const response = await fetch(`${BACKEND_URL}/api/folders/root`, {
           method: "GET",
           headers: {
             "Authorization": `Bearer ${authToken}`,
