@@ -26,6 +26,23 @@ import io
 load_dotenv()
 
 # ============================================================================
+# MINIO CLIENT CONFIGURATION
+# ============================================================================
+
+MINIO_BUCKET = os.getenv('MINIO_BUCKET', 'thedrive')
+def get_minio_client():
+    """Get configured MinIO client"""
+    minio_client = Minio(
+        endpoint=os.getenv('MINIO_ENDPOINT'),
+        access_key=os.getenv('MINIO_ROOT_USER'),
+        secret_key=os.getenv('MINIO_ROOT_PASSWORD'),
+        secure=os.getenv('MINIO_SECURE', 'False').lower() == 'true'
+    )
+    if not minio_client.bucket_exists(MINIO_BUCKET):
+        minio_client.make_bucket(MINIO_BUCKET)
+
+        
+# ============================================================================
 # SERIALIZERS
 # ============================================================================
 
@@ -162,20 +179,9 @@ class FileUploadSerializer(FileSerializer):
 
         return file_instance
 
-# ============================================================================
-# MINIO CLIENT CONFIGURATION
-# ============================================================================
 
-def get_minio_client():
-    """Get configured MinIO client"""
-    return Minio(
-        endpoint=os.getenv('MINIO_ENDPOINT', 'localhost:9000'),
-        access_key=os.getenv('MINIO_ACCESS_KEY', 'parth2412'),
-        secret_key=os.getenv('MINIO_SECRET_KEY', 'parth2412'),
-        secure=os.getenv('MINIO_SECURE', 'False').lower() == 'true'
-    )
 
-MINIO_BUCKET = os.getenv('MINIO_BUCKET', 'thedrive')
+
 
 
 # ============================================================================
@@ -238,10 +244,15 @@ def create_folder(request):
 @api_view(['GET'])
 def list_folder_contents(request, folder_id):
     """List contents of a folder"""
-    folder = get_object_or_404(Folder, id=folder_id, user=request.user)
-    
-    subfolders = Folder.objects.filter(parent=folder).order_by('created_at')
-    files = File.objects.filter(folder=folder).order_by('created_at')
+    subfolders = None
+    files = None
+    if folder_id == "root":
+        subfolders = Folder.objects.filter(parent=None).order_by('created_at')
+        files = File.objects.filter(folder=None).order_by('created_at')
+    else:
+        folder = get_object_or_404(Folder, id=folder_id, user=request.user)
+        subfolders = Folder.objects.filter(parent=folder).order_by('created_at')
+        files = File.objects.filter(folder=folder).order_by('created_at')
     
     data = {
         'folders': FolderSerializer(subfolders, many=True, context={'request': request}).data,
