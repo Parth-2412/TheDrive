@@ -262,8 +262,8 @@ def list_folder_contents(request, folder_id):
     check = None
     check = None if folder_id == 'root' else get_object_or_404(Folder, id=folder_id, user=request.user)
 
-    subfolders = Folder.objects.filter(parent=check).order_by('created_at')
-    files = File.objects.filter(folder=check).order_by('created_at')
+    subfolders = Folder.objects.filter(parent=check, user=request.user).order_by('created_at')
+    files = File.objects.filter(folder=check, user=request.user).order_by('created_at')
 
     
     data = {
