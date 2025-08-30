@@ -129,7 +129,8 @@ class StorageEntity(models.Model):
     
     class Meta:
         abstract = True
-
+    def __str__(self):
+        return str(self.id)
 
 class Folder(StorageEntity):
     """
@@ -150,14 +151,17 @@ class Folder(StorageEntity):
         related_name='subfolders',
         help_text="Parent folder - null for root folders"
     )
-    
+    folder_name_hash = models.CharField(
+        max_length=64, 
+        help_text="SHA-256 hash of encrypted file for integrity"
+    )
     class Meta:
         db_table = 'folders'
         indexes = [
             models.Index(fields=['user', 'parent']),
             models.Index(fields=['user', 'ai_enabled']),
         ]
-        unique_together = [('parent', 'name_encrypted')]
+        unique_together = [('parent', 'folder_name_hash')]
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -190,6 +194,10 @@ class File(StorageEntity):
         max_length=64, 
         help_text="SHA-256 hash of encrypted file for integrity"
     )
+    file_name_hash = models.CharField(
+        max_length=64, 
+        help_text="SHA-256 hash of encrypted file for integrity"
+    )
     
     # File's own encryption key (user's master key)
     key_encrypted = models.TextField(help_text = "This file's symmetric key encrypted with the drive master key, in base64 format")
@@ -212,6 +220,7 @@ class File(StorageEntity):
         self._meta.get_field('name_encrypted').help_text = "Original filename encrypted with drive master key"
         self._meta.get_field('ai_enabled').help_text = "Whether this file is AI-searchable"
 
+        unique_together = [('parent', 'file_name_hash')]
     
 class DocumentChunk(models.Model):
     """

@@ -67,7 +67,6 @@ const UploadItem = ({
       ...prev,
       [index]: true,
     }));
-    console.log(fileData.file)
     try {
 
       await onFileUpload(fileData, currentFolder)

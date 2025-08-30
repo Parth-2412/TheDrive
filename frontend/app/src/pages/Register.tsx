@@ -76,7 +76,7 @@ const RegisterPage: React.FC = () => {
           <MnemonicForm copy loading={false} buttonText='Register' onClick={handleRegister} initialMnemonic={mnemonic == '' ? undefined : mnemonic.split(' ')} />
       </div>
       <div>
-        New ? <IonRouterLink href="/login">Login here!</IonRouterLink>
+        Already have an account ? <IonRouterLink routerDirection='none' routerLink="/login" >Login here!</IonRouterLink>
       </div>
     </IonPage>
   );

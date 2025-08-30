@@ -1,22 +1,18 @@
-import { IonApp, IonPage, IonRouterOutlet, IonSplitPane, setupIonicReact } from '@ionic/react';
+import React, { useEffect, useState } from 'react';
+import { IonApp, IonPage, IonRouterOutlet, IonSpinner, IonButton, IonRouterLink, setupIonicReact } from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
-import { Redirect, Route } from 'react-router-dom';
+import { Route, Redirect } from 'react-router-dom'; // Using React Router v5
 import { useRecoilState } from 'recoil';
 import { userState } from './state/user';
-import { useEffect, useState } from 'react';
 import { importAesKey } from './services/crypto.service';
 import { stringToUint8Array } from './services/helpers.service';
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 import { login_with_keys } from './services/auth.service';
-
-import './global.css';
-import './theme/variables.css';
 import Manager from './pages/Manager';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import { IonSpinner } from '@ionic/react';
 import axiosInstance from './services/api.service';
-import SmartRedirect from './components/Redirect';
+import './global.css'
 
 setupIonicReact();
 
@@ -47,50 +43,69 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if(user == "loading" || !user?.accessToken || !user.refreshToken) return;
+    if(user == "loading" || user == null || !user.accessToken || !user.refreshToken) return;
+    // Set the Authorization header
     axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${user.accessToken}`;
-   
+    
     axiosInstance.interceptors.response.use(
-      response => response, // Directly return successful responses.
-      async error => {
+      (response) => response, // Return successful responses directly
+      async (error) => {
         const originalRequest = error.config;
-        if (error.response.status === 401 && !originalRequest._retry) {
-          originalRequest._retry = true; // Mark the request as retried to avoid infinite loops.
+
+        // Only handle 401 errors and retry the request if it hasn't been tried already
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          originalRequest._retry = true; // Mark the request as retried to avoid infinite loops
+
           try {
-            
-            // Make a request to your auth server to refresh the token.
-            const response = await axiosInstance.post(`/api/auth/token/refresh`, {
-              refresh_token : user.refreshToken,
+            // Make a request to refresh the access token
+            const response = await axiosInstance.post('/api/auth/token/refresh', {
+              refresh_token: user.refreshToken,
             });
+
             const { access_token, refresh_token: newRefreshToken } = response.data;
+
+            // Set the new access token and refresh token
             axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-            setUser({...user, accessToken: access_token, refreshToken: newRefreshToken})
-            return axiosInstance(originalRequest); // Retry the original request with the new access token.
+
+            // Update user state with the new tokens
+            setUser({
+              ...user,
+              accessToken: access_token,
+              refreshToken: newRefreshToken,
+            });
+
+            // Retry the original request with the new access token
+            originalRequest.headers['Authorization'] = `Bearer ${access_token}`;
+            return axiosInstance(originalRequest); // Retry the original request
+
           } catch (refreshError) {
-            // Handle refresh token errors by clearing stored tokens and redirecting to the login page.
             console.error('Token refresh failed:', refreshError);
-            setUser({...user, accessToken: undefined, refreshToken: undefined})
+            setUser({ ...user, accessToken: undefined, refreshToken: undefined });
           }
         }
-        return Promise.reject(error); // For all other errors, return the error as is.
+
+        // If the error is not 401 or retrying failed, reject the error
+        return Promise.reject(error);
       }
-          );
-  }, [(user =="loading" ? null : user?.accessToken), (user =="loading" ? null : user?.refreshToken)])
-  // Effect to handle user login when the access token is not available
+    );
+}, [user]);
   useEffect(() => {
     (async () => {
-
       if (user === null || user === 'loading') return;
-      console.log(user)
       if (!user.accessToken) {
-        const tokens = await login_with_keys(user);
-        setUser({ ...user, ...tokens, ready: true });
+        try {
+          const tokens = await login_with_keys(user);
+          setUser({ ...user, ...tokens, ready: true });
+        } catch (error) {
+          console.error(error);
+          setUser(null);
+        }
       }
-    })()
+    })();
   }, [user]);
 
   // Show the spinner when the app is loading the user
-  if (user === 'loading' || !user?.ready) {
+  if (user === 'loading' || (user !== null && !user.accessToken)) {
     return (
       <IonApp>
         <IonPage>
@@ -100,29 +115,26 @@ const App: React.FC = () => {
     );
   }
 
-  // Render login or manager based on user state
   return (
     <IonApp>
       <IonReactRouter>
         <IonRouterOutlet>
           {/* Login & Register routes */}
-          <Route exact path="/login">
-            {user ? <SmartRedirect to="/manager" /> : <Login />}
-          </Route>
-          <Route exact path="/register">
-            {user ? <SmartRedirect to="/manager" /> : <Register />}
-          </Route>
+          {
+            !user ? (
+              <>
+                <Route exact path="/login" render={() => <Login />} />
+                <Route exact path="/register" render={() => <Register />} />
+                <Route render={() => <Redirect to='/login' />} />
+              </>
+            ) : (
+              <Route>
+                <Manager />
+              </Route>
+            )
+          }
+         
 
-          {/* Manager (protected area after login) */}
-          <Route exact path="/manager">
-            {user && user.accessToken ? <Manager /> : <SmartRedirect to="/login" />}
-          </Route>
-
-          {/* Default redirect: send unknown routes to /login */}
-          <Route exact path="/">
-            <SmartRedirect to="/manager" condition={!!user?.accessToken} />
-            <SmartRedirect to="/login" condition={!user?.accessToken} />
-          </Route>
         </IonRouterOutlet>
       </IonReactRouter>
     </IonApp>

@@ -1,13 +1,13 @@
-ion-router-outlet {
-  background-color: rgb(244, 244, 244);
-}
+
 .ion-page {
   height: 100vh;
-    display: flex;
+  display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   align-items: center;
+  background-color: rgb(244, 244, 244);
+
 }
 
 * {

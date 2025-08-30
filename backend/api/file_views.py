@@ -51,7 +51,7 @@ class FolderSerializer(serializers.ModelSerializer):
     parent = serializers.CharField()
     class Meta:
         model = Folder
-        fields = ['id', 'name_encrypted', 'parent', 'ai_enabled', 'created_at', 'updated_at']
+        fields = ['id', 'name_encrypted', 'parent', 'ai_enabled', 'created_at', 'updated_at', 'folder_name_hash']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def validate_parent(self, value):
@@ -69,7 +69,7 @@ class FileSerializer(serializers.ModelSerializer):
     """Serializer for file operations"""
 
     download_url = serializers.SerializerMethodField()
-    
+    folder = serializers.CharField()
     class Meta:
         model = File
         fields = '__all__'
@@ -82,24 +82,34 @@ class FileSerializer(serializers.ModelSerializer):
         return None
 
     def validate_folder(self, value):
-        request = self.context.get('request')
-        if not Folder.objects.filter(id=value, user=request.user).exists():
-            raise serializers.ValidationError("Folder not found or access denied")
+        if value == 'root':
+            return None
+        
+        if value:
+            request = self.context.get('request')
+            if not Folder.objects.filter(id=value, user=request.user).exists():
+                raise serializers.ValidationError("Parent folder not found or access denied")
         return value
 
-
-class RenameSerializer(FileSerializer):
+class RenameFileSerializer(FileSerializer):
     """Serializer for rename operations"""
     class Meta(FileSerializer.Meta):
-        fields = ['name_encrypted']
+        fields = ['name_encrypted', 'file_name_hash']
+        read_only_fields = []
+class RenameFolderSerializer(FolderSerializer):
+    """Serializer for rename operations"""
+    class Meta(FolderSerializer.Meta):
+        fields = ['name_encrypted', 'folder_name_hash']
         read_only_fields = []
 
 
 class MoveSerializer(serializers.Serializer):
     """Serializer for move operations"""
-    destination_folder_id = serializers.UUIDField(help_text="Destination folder ID")
+    destination_folder_id = serializers.CharField(help_text="Destination folder ID")
     
     def validate_destination_folder_id(self, value):
+        if value == 'root':
+            return None
         request = self.context.get('request')
         if not Folder.objects.filter(id=value, user=request.user).exists():
             raise serializers.ValidationError("Destination folder not found or access denied")
@@ -108,12 +118,13 @@ class MoveSerializer(serializers.Serializer):
 
 class CopySerializer(FileSerializer):
     """Serializer for copy operations"""
-    destination_folder_id = serializers.UUIDField(help_text="Destination folder ID")
+    destination_folder_id = serializers.CharField(help_text="Destination folder ID")
     class Meta(FileSerializer.Meta):
-        fields = ['name_encrypted', 'key_encrypted', 'key_encrypted_iv', 'file_iv', 'destination_folder_id']
         read_only_fields = []
     
     def validate_destination_folder_id(self, value):
+        if value == 'root':
+            return None
         request = self.context.get('request')
         if not Folder.objects.filter(id=value, user=request.user).exists():
             raise serializers.ValidationError("Destination folder not found or access denied")
@@ -130,13 +141,14 @@ class FileUploadSerializer(FileSerializer):
 
     # Extra JSON-only fields
     file_data = serializers.CharField(write_only=True, help_text="Base64-encoded encrypted file")
-
+    folder = serializers.CharField()
 
     class Meta(FileSerializer.Meta):
         # Add the JSON-only fields to input schema
-        fields = ['file_data', 'name_encrypted', 'key_encrypted', 'key_encrypted_iv', 'file_iv', 'folder_id']
+        fields = ['file_data', 'name_encrypted', 'file_name_hash', 'file_hash', 'key_encrypted', 'key_encrypted_iv', 'file_iv', 'folder']
         read_only_fields = []
 
+    
     def create(self, validated_data):
         request = self.context.get("request")
 
@@ -153,8 +165,7 @@ class FileUploadSerializer(FileSerializer):
         file_id = uuid.uuid4()
         minio_path = f"{file_id}.enc"
         file_size = len(file_bytes)
-        file_hash = hashlib.sha256(file_bytes).hexdigest()
-
+        folder_id = validated_data.pop('folder')
         # Upload to MinIO
         minio_client = get_minio_client()
         content_type = "application/octet-stream"
@@ -172,7 +183,7 @@ class FileUploadSerializer(FileSerializer):
             "id": file_id,
             "user": request.user,
             "file_size": file_size,
-            "file_hash": file_hash,
+            "folder_id": folder_id,
         })
 
         file_instance = super().create(validated_data)
@@ -219,7 +230,8 @@ def create_folder(request):
                 user=request.user,
                 name_encrypted=serializer.validated_data['name_encrypted']              ,
                 parent_id=serializer.validated_data.get('parent'),
-                ai_enabled=serializer.validated_data.get('ai_enabled', False)
+                folder_name_hash=serializer.validated_data.get('folder_name_hash'),
+                ai_enabled=serializer.validated_data.get('ai_enabled', False),
             )
             
             
@@ -266,7 +278,7 @@ def list_folder_contents(request, folder_id):
     operation_id='rename_folder',
     summary='Rename a folder',
     description='Rename the specified folder',
-    request=RenameSerializer,
+    request=RenameFolderSerializer,
     responses={200: FolderSerializer},
     tags=['Folders']
 )
@@ -274,11 +286,12 @@ def list_folder_contents(request, folder_id):
 def rename_folder(request, folder_id):
     """Rename a folder"""
     folder = get_object_or_404(Folder, id=folder_id, user=request.user)
-    serializer = RenameSerializer(data=request.data)
+    serializer = RenameFolderSerializer(data=request.data)
     
     if serializer.is_valid():
         try:
             folder.name_encrypted = serializer.validated_data['name_encrypted']
+            folder.folder_name_hash = serializer.validated_data['folder_name_hash']
             folder.save()
             return Response(FolderSerializer(folder, context={'request': request}).data)
                 
@@ -434,7 +447,7 @@ def download_file(request, file_id):
     operation_id='rename_file',
     summary='Rename a file',
     description='Rename the specified file',
-    request=RenameSerializer,
+    request=RenameFileSerializer,
     responses={200: FileSerializer},
     tags=['Files']
 )
@@ -442,12 +455,13 @@ def download_file(request, file_id):
 def rename_file(request, file_id):
     """Rename a file"""
     file_record = get_object_or_404(File, id=file_id, user=request.user)
-    serializer = RenameSerializer(data=request.data)
+    serializer = RenameFileSerializer(data=request.data)
     
     if serializer.is_valid():
         try:
             # Update encrypted name
             file_record.name_encrypted = serializer.validated_data['name_encrypted']
+            file_record.file_name_hash = serializer.validated_data['file_name_hash']
             file_record.save()
             
             return Response(FileSerializer(file_record, context={'request': request}).data)
@@ -518,6 +532,7 @@ def copy_file(request, file_id):
                     user=request.user,
                     folder_id=destination_folder_id,
                     name_encrypted=new_name,
+                    file_name_hash=serializer.validated_data.get('file_name_hash'),
                     minio_path=new_minio_path,
                     file_size=file_record.file_size,
                     file_hash=file_record.file_hash,  # Same content, same hash

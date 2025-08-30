@@ -52,7 +52,7 @@ const LoginForm: React.FC = () => {
     <IonPage>
       <MnemonicForm loading={loading} onClick={handleLogin} buttonText='Login'/>
       <div>
-        New ? <IonRouterLink href="/register">Register here!</IonRouterLink>
+        New ? <IonRouterLink routerLink="/register" routerDirection='forward'>Register here!</IonRouterLink>
       </div>
     </IonPage>
   );

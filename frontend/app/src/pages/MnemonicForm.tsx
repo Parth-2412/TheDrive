@@ -20,13 +20,12 @@ const MnemonicForm: React.FC<{
     if (initialMnemonic) {
       setMnemonic(initialMnemonic);
     }
-  }, [initialMnemonic]);
+  }, [initialMnemonic.join(' ')]);
 
   // Handle mnemonic change and auto-focus behavior
   const handleMnemonicChange = (index: number, value: string) => {
     // Clean up the input by trimming whitespace and removing extra spaces
     const cleanValue = value.trim().replace(/\s+/g, ' ');
-
     const newMnemonic = [...mnemonic];
     newMnemonic[index] = cleanValue;
     setMnemonic(newMnemonic);

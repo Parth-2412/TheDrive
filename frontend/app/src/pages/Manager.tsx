@@ -3,7 +3,7 @@ import "../../../react-file-manager/dist/style.css";
 import { useCallback, useEffect,  useState } from "react";
 import './Manager.css';
 import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
-import { importAesKey } from "../services/crypto.service";
+import { generateSHA256Hash, getFileSHA256Hash, importAesKey } from "../services/crypto.service";
 import { actualstringToUint8Array, stringToUint8Array } from "../services/helpers.service";
 import axiosInstance from "../services/api.service"; // Import axios instance
 import encryptFile, { decryptFileName, encryptName } from "../services/encrypt.service";
@@ -23,7 +23,7 @@ interface StorageEntity {
   path : string;
 }
 
-interface File extends StorageEntity {
+interface IFile extends StorageEntity {
   file_size: number;
   file_hash : string;
   isDirectory: false;
@@ -32,14 +32,14 @@ interface File extends StorageEntity {
   key_encrypted_iv: string;
   folder : string;
 }
-interface Folder extends StorageEntity {
+interface IFolder extends StorageEntity {
   parent: string | null;
   isDirectory: true;
 }
 interface NavState {
-  currentFolder: Folder;
+  currentFolder: IFolder;
 }
-const ROOT_FOLDER : Folder = {
+const ROOT_FOLDER : IFolder = {
   path : '/',
   parent: '',
   id : 'root',
@@ -54,7 +54,7 @@ const fileUploadConfig = {
   url: BACKEND_URL+'/api/files/',
 }
 
-function removeDuplicates(arr : (File|Folder)[]) {
+function removeDuplicates(arr : (IFile|IFolder)[]) {
     const seen = new Set();
     return arr.filter(item => {
         if (seen.has(item.id)) {
@@ -67,16 +67,16 @@ function removeDuplicates(arr : (File|Folder)[]) {
 }
 
 const Manager: React.FC = () => {
-  const [files, setFiles] = useState<(File|Folder)[]>([]);
+  const [files, setFiles] = useState<(IFile|IFolder)[]>([]);
   const [user,_] = useRecoilState<User>(userState as RecoilState<User>)
   const [navState, setNavState] = useState<NavState>({ currentFolder : ROOT_FOLDER });
   const { currentFolder } = navState;
   const [present] = useIonToast();
 
-  const get_path = (name:string, currentFolder: Folder) => currentFolder.path + (currentFolder.id == 'root' ? '' : '/') + name
+  const get_path = (name:string, currentFolder: IFolder) => currentFolder.path + (currentFolder.id == 'root' ? '' : '/') + name
 
   const fetchFolderFiles = useCallback(
-    async (currentFolder: Folder, masterAesKey: CryptoKey) => {
+    async (currentFolder: IFolder, masterAesKey: CryptoKey) => {
       if (!user.masterAesKey) {
         return; // Wait until the user.masterAesKey is set before proceeding
       }
@@ -105,6 +105,7 @@ const Manager: React.FC = () => {
           data.files.map(async (file: any) => {
             const name  = await decryptFileName(file.name_encrypted, masterAesKey)
             return {
+              ...file,
               name,
               isDirectory: false,
               path: get_path(name, currentFolder),
@@ -138,7 +139,7 @@ const Manager: React.FC = () => {
 
   console.log(files)
 
-  const handleFileRename = async (file: File | Folder, newName: string) => {
+  const handleFileRename = async (file: IFile | IFolder, newName: string) => {
     
     if(!user.masterAesKey){
       present(showError());
@@ -153,15 +154,15 @@ const Manager: React.FC = () => {
   });
 
   setFiles(updatedFiles);
-  
+  const new_name_hash = await generateSHA256Hash(newName)
   const encryptedName = await encryptName(newName, user.masterAesKey)
   try {
     let response;
     if(file.isDirectory){
-      response = await axiosInstance.patch(`/api/folders/${file.id}/rename/`, {name_encrypted: encryptedName});
+      response = await axiosInstance.patch(`/api/folders/${file.id}/rename/`, {name_encrypted: encryptedName, folder_name_hash : new_name_hash});
     }
     else {
-      response = await axiosInstance.patch(`/api/files/${file.id}/rename/`, {name_encrypted: encryptedName});
+      response = await axiosInstance.patch(`/api/files/${file.id}/rename/`, {name_encrypted: encryptedName, file_name_hash : new_name_hash});
     }
     
     }
@@ -178,18 +179,21 @@ const Manager: React.FC = () => {
     }
   }
 
-  async function handleUpload(fileData: any, currentFolder : Folder) {
-    if(sentUploadRequests.has(fileData.name)) return;
-    sentUploadRequests.add(fileData.name);
-      
+  async function handleUpload(fileData: { name : string; file : File}, currentFolder : IFolder) {
+    if(sentUploadRequests.has(fileData.file.name)) return;
+    sentUploadRequests.add(fileData.file.name);
+    if(!currentFolder) currentFolder = ROOT_FOLDER;
     const encryptedData = await encryptFile(fileData.file, user.masterAesKey)
-
+    
     const payload = {
       file_data: encryptedData.ciphertext,
       file_iv: encryptedData.file_iv,
       key_encrypted: encryptedData.wrapped_key,
       key_encrypted_iv: encryptedData.wrap_iv,
       name_encrypted: encryptedData.filename,
+      file_name_hash : await generateSHA256Hash(fileData.name),
+      file_hash : await getFileSHA256Hash(fileData.file),
+      folder: currentFolder.id,
     };
 
     // Use Axios to send the encrypted data
@@ -200,11 +204,9 @@ const Manager: React.FC = () => {
             "Content-Type": "application/json",
           },
         })
-      sentUploadRequests.delete(fileData.name)
-      if(!currentFolder) currentFolder = ROOT_FOLDER
-      const file : File = {
+      const file : IFile = {
         ...response.data,
-        path : get_path(fileData.name, currentFolder),
+        path : get_path(fileData.file.name, currentFolder),
         name : fileData.file.name,
         isDirectory: false,
       }
@@ -212,12 +214,14 @@ const Manager: React.FC = () => {
       setFiles(currFiles => [...currFiles, file ])          
     }
     catch (error){
-      sentUploadRequests.delete(fileData.name);
       throw error;
+    }
+    finally {
+      sentUploadRequests.delete(fileData.file.name);
     }
              
   }
-  const handleCreateFolder = async (newName: string, currentFolder : Folder | null) => {
+  const handleCreateFolder = async (newName: string, currentFolder : IFolder | null) => {
 
     if(!currentFolder){
       currentFolder = ROOT_FOLDER;
@@ -225,8 +229,8 @@ const Manager: React.FC = () => {
     const encryptedName = await encryptName(newName, user.masterAesKey)
     console.log(encryptedName)
     try {
-      const response = await axiosInstance.post('/api/folders/', {name_encrypted: encryptedName, parent: currentFolder.id, ai_enabled: false});
-      const newFolder : Folder = {
+      const response = await axiosInstance.post('/api/folders/', {name_encrypted: encryptedName, folder_name_hash : await generateSHA256Hash(newName), parent: currentFolder.id, ai_enabled: false});
+      const newFolder : IFolder = {
         name: newName,
         isDirectory: true,
         path: get_path(newName, currentFolder),
