@@ -26,6 +26,7 @@ const FileManager = ({
   onCreateFolder,
   onFileUploading = () => {},
   onFileUploaded = () => {},
+  onFileUpload = () => {},
   onCut,
   onCopy,
   onPaste,

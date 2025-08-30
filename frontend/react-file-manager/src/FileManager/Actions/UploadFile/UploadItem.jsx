@@ -9,7 +9,9 @@ import { FaRegCheckCircle } from "react-icons/fa";
 import { IoMdRefresh } from "react-icons/io";
 import { useFiles } from "../../../contexts/FilesContext";
 import { useTranslation } from "../../../contexts/TranslationProvider";
-import encryptFile from '../../../../../app/src/services/encrypt.service'
+import axiosInstance from "../../../../../app/src/services/api.service"; // Import your Axios instance
+import encryptFile from '../../../../../app/src/services/encrypt.service';
+
 const UploadItem = ({
   index,
   fileData,
@@ -18,31 +20,27 @@ const UploadItem = ({
   fileUploadConfig,
   onFileUploaded,
   handleFileRemove,
-  masterAesKey
+  masterAesKey,
+  onFileUpload // New prop to handle file upload outside this component
 }) => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploaded, setIsUploaded] = useState(false);
   const [isCanceled, setIsCanceled] = useState(false);
   const [uploadFailed, setUploadFailed] = useState(false);
   const fileIcons = useFileIcons(33);
-  const xhrRef = useRef();
   const { onError } = useFiles();
   const t = useTranslation();
 
-  const handleUploadError = (xhr) => {
+  const handleUploadError = (error) => {
     setUploadProgress(0);
     setIsUploading((prev) => ({
       ...prev,
       [index]: false,
     }));
-    const error = {
+    const errorMessage = {
       type: "upload",
       message: t("uploadFail"),
-      response: {
-        status: xhr.status,
-        statusText: xhr.statusText,
-        data: xhr.response,
-      },
+      error: error,
     };
 
     setFiles((prev) =>
@@ -50,7 +48,7 @@ const UploadItem = ({
         if (index === i) {
           return {
             ...file,
-            error: error.message,
+            error: errorMessage.message,
           };
         }
         return file;
@@ -58,103 +56,75 @@ const UploadItem = ({
     );
 
     setUploadFailed(true);
-
-    onError(error, fileData.file);
+    onError(errorMessage, fileData.file);
   };
 
   const fileUpload = (fileData) => {
     if (!!fileData.error) return;
 
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhrRef.current = xhr;
-      setIsUploading((prev) => ({
-        ...prev,
-        [index]: true,
-      }));
+    setIsUploading((prev) => ({
+      ...prev,
+      [index]: true,
+    }));
 
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const progress = Math.round((event.loaded / event.total) * 100);
-          setUploadProgress(progress);
-        }
-      };
+    // Encrypt the file and send the encrypted data as JSON payload
+    encryptFile(fileData.file, masterAesKey)
+      .then((encryptedData) => {
+        const payload = {
+          file_data: encryptedData.ciphertext,
+          file_iv: encryptedData.file_iv,
+          key_encrypted: encryptedData.wrapped_key,
+          key_encrypted_iv: encryptedData.wrap_iv,
+          name_encrypted: encryptedData.filename,
+          mime: encryptedData.mime,
+        };
+        const jsonData = JSON.stringify(payload);
 
-      xhr.onload = () => {
+        // Use Axios to send the encrypted data
+        axiosInstance
+          .post(fileUploadConfig?.url, jsonData, {
+            headers: {
+              "Content-Type": "application/json",
+              ...fileUploadConfig?.headers, // Add any other headers
+            },
+          })
+          .then((response) => {
+            setIsUploaded(true);
+            onFileUploaded(response.data);
+            setIsUploading((prev) => ({
+              ...prev,
+              [index]: false,
+            }));
+          })
+          .catch((error) => {
+            setIsUploading((prev) => ({
+              ...prev,
+              [index]: false,
+            }));
+            handleUploadError(error);
+          });
+      })
+      .catch((error) => {
         setIsUploading((prev) => ({
           ...prev,
           [index]: false,
         }));
-        if (xhr.status === 200 || xhr.status === 201) {
-          setIsUploaded(true);
-          onFileUploaded(xhr.response);
-          resolve(xhr.response);
-        } else {
-          reject(xhr.statusText);
-          handleUploadError(xhr);
-        }
-      };
-
-      xhr.onerror = () => {
-        reject(xhr.statusText);
-        handleUploadError(xhr);
-      };
-
-      const method = fileUploadConfig?.method || "POST";
-      xhr.open(method, fileUploadConfig?.url, true);
-      const headers = fileUploadConfig?.headers;
-      for (let key in headers) {
-        xhr.setRequestHeader(key, headers[key]);
-      }
-      // console.log(masterAesKey)
-      // encryptFile(fileData.file, masterAesKey)
-      //   .then((encryptedData) => {
-      //     const payload = {
-      //     ciphertext: encryptedData.ciphertext,
-      //     file_iv: encryptedData.file_iv,
-      //     wrapped_key: encryptedData.wrapped_key,
-      //     wrap_iv: encryptedData.wrap_iv,
-      //     filename: encryptedData.filename,
-      //     mime: encryptedData.mime,
-      //     };
-      //     const jsonData = JSON.stringify(payload);
-
-      //     xhr.send(jsonData);
-      //   })
-      //   .catch((error) => {
-      //     reject(error);
-      //     handleUploadError(xhr);
-      //   })
-      
-
-      const formData = new FormData();
-      const appendData = fileData?.appendData;
-      for (let key in appendData) {
-        appendData[key] && formData.append(key, appendData[key]);
-      }
-      formData.append("file", fileData.file);
-
-      xhr.send(formData);
-    });
+        handleUploadError(error);
+      });
   };
 
   useEffect(() => {
-    // Prevent double uploads with strict mode
-    if (!xhrRef.current) {
-      fileUpload(fileData);
-    }
+    fileUpload(fileData);
   }, []);
 
   const handleAbortUpload = () => {
-    if (xhrRef.current) {
-      xhrRef.current.abort();
-      setIsUploading((prev) => ({
-        ...prev,
-        [index]: false,
-      }));
-      setIsCanceled(true);
-      setUploadProgress(0);
-    }
+    // Handle cancel logic if needed
+    setIsUploading((prev) => ({
+      ...prev,
+      [index]: false,
+    }));
+    setIsCanceled(true);
+    setUploadProgress(0);
   };
 
   const handleRetry = () => {
@@ -176,11 +146,10 @@ const UploadItem = ({
     }
   };
 
-  // File was removed by the user beacuse it was unsupported or exceeds file size limit.
+  // File was removed by the user because it was unsupported or exceeds file size limit.
   if (!!fileData.removed) {
     return null;
   }
-  //
 
   return (
     <li>
