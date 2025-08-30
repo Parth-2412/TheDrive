@@ -19,7 +19,7 @@ const App: React.FC = () => {
 
   let show = true;
   return (
-        <IonApp>
+    <IonApp>
       <IonReactRouter>
         <IonRouterOutlet>
           {/* Login & Register routes */}

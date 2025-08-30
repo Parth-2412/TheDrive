@@ -7,14 +7,113 @@ import { importAesKey } from "../services/crypto.service";
 import { actualstringToUint8Array, stringToUint8Array } from "../services/helpers.service";
 import axiosInstance from "../services/api.service"; // Import axios instance
 import { decryptFileName, encryptName } from "../services/encrypt.service";
+import { useIonToast } from '@ionic/react';
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
+
+interface StorageEntity {
+  id : string;
+  name : string;
+  ai_enabled : boolean;
+  created_at : string;
+  updated_at : string;
+  path : string;
+}
+
+interface File extends StorageEntity {
+  file_size: number;
+  file_hash : string;
+  isDirectory: false;
+  key_encrypted: string;
+  file_iv: string;
+  key_encrypted_iv: string;
+  folder : string;
+}
+interface Folder extends StorageEntity {
+  parent: string | null;
+}
+interface NavState {
+  currentFolder: Folder;
+}
+const ROOT_FOLDER : Folder = {
+  path : '/',
+  parent: '',
+  id : 'root',
+  name : '',
+  ai_enabled: false,
+  created_at : '',
+  updated_at: '',
+}
+
+const fileUploadConfig = {
+  url: BACKEND_URL
+}
+
+const ERROR_CONFIG : {
+  message : string;
+  duration: number;
+  color: string;
+  position: 'top' | 'middle' | 'bottom';
+} = {
+            message: "Something went wrong!",
+            duration: 3000,
+            color: 'danger',
+            position: 'bottom',
+};
 const Manager: React.FC = () => {
-  const fileUploadConfig = {
-    url: BACKEND_URL
-  }
-  const [files, setFiles] = useState<any[]>([]);
+  const [files, setFiles] = useState<(File|Folder)[]>([]);
   const [masterAesKey, setMasterAesKey] = useState<CryptoKey | null>(null);
+  const [navState, setNavState] = useState<NavState>({ currentFolder : ROOT_FOLDER });
+  const { currentFolder } = navState;
+  const [present] = useIonToast();
+
+
+  const fetchFolderFiles = async (currentFolder: Folder, masterAesKey: CryptoKey | null) => {
+      if (!masterAesKey) {
+        return; // Wait until the masterAesKey is set before proceeding
+      }
+      try {
+        const response = await axiosInstance.get(`/api/folders/${currentFolder.id}`, {
+        });
+
+        const data = response.data; // Assuming response is in JSON format
+
+
+          // Map the response data to the format needed for FileManager
+          const folders = await Promise.all(
+            data.folders.map(
+              async (folder: any) => {
+                const name = await decryptFileName(folder.name_encrypted, masterAesKey)
+                return {
+                  ...folder,
+                  name,  // Await the decryption
+                  isDirectory: true,
+                  path: currentFolder.path + '/' + name,
+                }
+              })
+          );
+
+        const files = await Promise.all(
+          data.files.map(async (file: any) => {
+            const name  = await decryptFileName(file.name_encrypted, masterAesKey)
+            return {
+              name,  // Await the decryption
+              isDirectory: false,
+              path: currentFolder.path + '/' + name,
+              size: file.file_size,
+              downloadUrl: file.download_url,
+            }
+          })
+        );
+
+
+          setFiles([...folders, ...files]); // Combine folders and files into one array
+        
+      } catch (error) {
+        console.error("Error fetching root files:", error);
+        present(ERROR_CONFIG);
+      }
+  };
 
   // Fetch the master AES key from secure storage
   useEffect(() => {
@@ -31,77 +130,58 @@ const Manager: React.FC = () => {
     fetchMasterKey();
   }, []);
 
+  
+
   // Fetch root files from the backend using axios
   useEffect(() => {
-    const fetchFolderFiles = async (currentFolder: any) => {
-      if (!masterAesKey) {
-        return; // Wait until the masterAesKey is set before proceeding
-      }
-      try {
-        const response = await axiosInstance.get(`/api/folders/${currentFolder.id}`, {
-        });
+    if(!masterAesKey) return;
+    fetchFolderFiles(currentFolder,masterAesKey);
+  }, [masterAesKey, fetchFolderFiles, currentFolder]);
 
-        const data = response.data; // Assuming response is in JSON format
-
-        // If the request was successful
-        if (response.status === 200) {
-          // Map the response data to the format needed for FileManager
-          const folders = await Promise.all(data.folders.map(async (folder: any) => {
-          const name = await decryptFileName(folder.name_encrypted, masterAesKey as CryptoKey)
-            return {...folder,
-          name,  // Await the decryption
-          isDirectory: true,
-          path: currentFolder.path + '/' + name,
-          updatedAt: folder.updated_at,}
-        }));
-
-        const files = await Promise.all(data.files.map(async (file: any) => {
-          
-          const name  = await decryptFileName(file.name_encrypted, masterAesKey as CryptoKey)
-          return {
-          name,  // Await the decryption
-          isDirectory: false,
-          path: currentFolder.path + '/' + name,
-          updatedAt: file.updated_at,
-          size: file.file_size,
-          downloadUrl: file.download_url,}
-        }));
-
-
-          setFiles([...folders, ...files]); // Combine folders and files into one array
-        } else {
-          console.error("Failed to fetch root files:", data);
-        }
-      } catch (error) {
-        console.error("Error fetching root files:", error);
-      }
-    };
-
-    fetchFolderFiles();
-  }, [masterAesKey]);
   console.log(files)
-  const handleCreateFolder = async (newName: string) => {
 
-    
+  const handleCreateFolder = async (newName: string, currentFolder : Folder | null) => {
+
+    if(currentFolder == null){
+      currentFolder = ROOT_FOLDER;
+    }
     const encryptedName = await encryptName(newName, masterAesKey as CryptoKey)
     console.log(encryptedName)
-    const response = await axiosInstance.post('/api/folders/', {name_encrypted: encryptedName, parent: null, ai_enabled: false});
-    if (response.status === 201) {
-        const newFolder = {
-          name: newName,  // You can update this once decrypted
-          isDirectory: true,
-          path: '/' + newName,
-          updatedAt: new Date(),  // You may want to use the actual timestamp from the response
-        };
-        setFiles(prevFiles => [...prevFiles, newFolder]);
-
-      }
+    try {
+      const response = await axiosInstance.post('/api/folders/', {name_encrypted: encryptedName, parent: currentFolder.id, ai_enabled: false});
+      const newFolder : Folder = {
+        isDirectory: true,
+        path: '/' + newName,
+        ...response.data
+      };
+      setFiles(prevFiles => [...prevFiles, newFolder]);
+    }
+    catch(error) {
+      console.error(error);
+      present(ERROR_CONFIG);
+    }
   }
 
   // const handleFileUpload = async ()
 
   return (
-    <FileManager onNavChange={} fileUploadConfig={fileUploadConfig} files={files} masterAesKey={masterAesKey} onFileUploaded={console.log} onCreateFolder={handleCreateFolder} initialPath=""/>
+    <FileManager 
+      onNavChange={(navData : NavState) => {
+        if(navData.currentFolder == null ){
+          if(currentFolder.id != 'root'){
+            setNavState({...navState, currentFolder : ROOT_FOLDER})
+          }
+        }
+        else if(navData.currentFolder.id = currentFolder.id){}
+        else {
+          setNavState(navData);
+        }
+      }} 
+      files={files} 
+      masterAesKey={masterAesKey} 
+      onCreateFolder={handleCreateFolder} 
+      initialPath=""
+    />
   );
 };
 
