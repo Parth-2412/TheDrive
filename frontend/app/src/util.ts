@@ -1,11 +1,11 @@
-export const ERROR_CONFIG : {
+export const showError : (message ?: string) => {
   message : string;
   duration: number;
   color: string;
   position: 'top' | 'middle' | 'bottom';
-} = {
-            message: "Something went wrong!",
+} = (message = "Something went wrong!") => ({
+            message: message,
             duration: 3000,
             color: 'danger',
             position: 'bottom',
-};
+});

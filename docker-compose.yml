@@ -29,8 +29,7 @@ services:
       - "9001:9001"  # MinIO Console UI (optional)
     volumes:
       - minio-data:/data  # MinIO persistent storage
-      - ./init-minio.sh:/init-minio.sh  # Mount the init script
-    command: /bin/bash -c "/init-minio.sh && minio server --console-address ':9001' /data"
+    command: minio server --console-address ':9001' /data
     networks:
       - minio-network
 

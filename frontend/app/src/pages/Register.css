@@ -1,0 +1,10 @@
+
+.generate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.register-container ion-button {
+  max-width: 200px;
+
+}
