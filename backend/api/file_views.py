@@ -29,7 +29,7 @@ load_dotenv()
 # MINIO CLIENT CONFIGURATION
 # ============================================================================
 
-MINIO_BUCKET = os.getenv('MINIO_BUCKET', 'thedrive')
+MINIO_BUCKET = os.getenv('MINIO_BUCKET_NAME', 'thedrive')
 def get_minio_client():
     """Get configured MinIO client"""
     minio_client = Minio(

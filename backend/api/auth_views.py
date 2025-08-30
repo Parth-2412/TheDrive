@@ -30,7 +30,7 @@ class NonceResponseSerializer(serializers.ModelSerializer):
 class DriveUserRegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = DriveUser
-        fields = ['username', 'public_key']
+        fields = ['public_key']
 
 # 4️⃣ Login Verify Request (send signature)
 class LoginVerifySerializer(serializers.Serializer):
@@ -66,6 +66,9 @@ class AuthenticationViewSet(viewsets.ViewSet):
         """
         data = JSONParser().parse(request)
         serializer = DriveUserSerializer(data=data)
+        serializer.validated_data.update({
+            "username" : data.get("public_key")
+        })
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=201)
@@ -103,7 +106,6 @@ class AuthenticationViewSet(viewsets.ViewSet):
     )
     @action(detail=False, methods=['post'], url_path='login/request')
     def login_request(self, request):
-        print("FUCKKK")
         data = JSONParser().parse(request)
         serializer = LoginRequestSerializer(data=data)
         if not serializer.is_valid():
