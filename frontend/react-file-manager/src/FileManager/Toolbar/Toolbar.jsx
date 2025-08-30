@@ -26,7 +26,8 @@ const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions, onNavC
   const { clipBoard, setClipBoard, handleCutCopy, handlePasting } = useClipBoard();
   const { activeLayout } = useLayout();
   const t = useTranslation();
-  const { currentFolder } = navData;
+  const { currentFolder, setCurrentPathFiles, currentPathFiles } = navData;
+  
   useEffect(() => {
       onNavChange(navData)
     }, [navData])
@@ -135,7 +136,7 @@ const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions, onNavC
   >
     <TbSparkles size={18} />
     <span>
-      {selectedFiles[0].isAiActive ? "Disable AI Mode" : "Enable AI Mode"}
+      {currentPathFiles.find(f => f.path === selectedFiles[0].path)?.isAiActive ? "Disable AI Mode" : "Enable AI Mode"}
     </span>
   </button>
 )}

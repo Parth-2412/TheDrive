@@ -61,7 +61,7 @@ export async function encryptName (name: string, masterAesKey: CryptoKey) {
     {name: "AES-GCM", iv}, masterAesKey, new TextEncoder().encode(name)
   )
   const combined = new Uint8Array(iv.length + encryptedName.byteLength);
-  console.log("Array of encryptedName, ", new Uint8Array(encryptedName))
+  // console.log("Array of encryptedName, ", new Uint8Array(encryptedName))
   combined.set(iv);
   combined.set(new Uint8Array(encryptedName), iv.length);
   return toBase64(combined.buffer)
@@ -78,10 +78,10 @@ export async function decryptFileName(encryptedData: string, masterAesKey: Crypt
   // The first 12 bytes are the IV
   const iv = uint8ArrayCombined.slice(0, 12);  // AES-GCM IV is 12 bytes
   // The rest is the ciphertext
-  console.log("IV of decryptFileName, ", iv)
-  console.log("Array of decryptFileName, ", uint8ArrayCombined.slice(12))
+  // console.log("IV of decryptFileName, ", iv)
+  // console.log("Array of decryptFileName, ", uint8ArrayCombined.slice(12))
   const ciphertext = uint8ArrayCombined.slice(12);
-  console.log(iv)
+  // console.log(iv)
   try {
     // Decrypt the ciphertext with AES-GCM using the IV and master AES key
     const decryptedName = await crypto.subtle.decrypt(
