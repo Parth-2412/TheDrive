@@ -30,7 +30,7 @@ const Manager: React.FC = () => {
         },
       ]);
     return (
-       <FileManager files={files}/> 
+       <FileManager onNavChange={console.log} files={files}/> 
     );
 };
 

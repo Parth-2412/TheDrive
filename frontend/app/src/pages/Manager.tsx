@@ -1,6 +1,6 @@
 import FileManager from "../../../react-file-manager/src/FileManager";
 import "../../../react-file-manager/dist/style.css";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect,  useState } from "react";
 import './Manager.css';
 import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
 import { importAesKey } from "../services/crypto.service";
@@ -8,6 +8,7 @@ import { actualstringToUint8Array, stringToUint8Array } from "../services/helper
 import axiosInstance from "../services/api.service"; // Import axios instance
 import { decryptFileName, encryptName } from "../services/encrypt.service";
 import { useIonToast } from '@ionic/react';
+import { ERROR_CONFIG } from "../util";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
 
@@ -49,17 +50,18 @@ const fileUploadConfig = {
   url: BACKEND_URL
 }
 
-const ERROR_CONFIG : {
-  message : string;
-  duration: number;
-  color: string;
-  position: 'top' | 'middle' | 'bottom';
-} = {
-            message: "Something went wrong!",
-            duration: 3000,
-            color: 'danger',
-            position: 'bottom',
-};
+function removeDuplicates(arr : (File|Folder)[]) {
+    const seen = new Set();
+    return arr.filter(item => {
+        if (seen.has(item.id)) {
+            return false;
+        } else {
+            seen.add(item.id);
+            return true;
+        }
+    });
+}
+
 const Manager: React.FC = () => {
   const [files, setFiles] = useState<(File|Folder)[]>([]);
   const [masterAesKey, setMasterAesKey] = useState<CryptoKey | null>(null);
@@ -68,7 +70,8 @@ const Manager: React.FC = () => {
   const [present] = useIonToast();
 
 
-  const fetchFolderFiles = async (currentFolder: Folder, masterAesKey: CryptoKey | null) => {
+  const fetchFolderFiles = useCallback(
+    async (currentFolder: Folder, masterAesKey: CryptoKey | null) => {
       if (!masterAesKey) {
         return; // Wait until the masterAesKey is set before proceeding
       }
@@ -88,18 +91,18 @@ const Manager: React.FC = () => {
                   ...folder,
                   name,  // Await the decryption
                   isDirectory: true,
-                  path: currentFolder.path + '/' + name,
+                  path: currentFolder.path + name ,
                 }
               })
           );
 
-        const files = await Promise.all(
+        const sub_files = await Promise.all(
           data.files.map(async (file: any) => {
             const name  = await decryptFileName(file.name_encrypted, masterAesKey)
             return {
               name,  // Await the decryption
               isDirectory: false,
-              path: currentFolder.path + '/' + name,
+              path: currentFolder.path + name,
               size: file.file_size,
               downloadUrl: file.download_url,
             }
@@ -107,13 +110,13 @@ const Manager: React.FC = () => {
         );
 
 
-          setFiles([...folders, ...files]); // Combine folders and files into one array
+          setFiles(current_files => removeDuplicates([...current_files,...folders, ...sub_files])); // Combine folders and files into one array
         
       } catch (error) {
         console.error("Error fetching root files:", error);
         present(ERROR_CONFIG);
       }
-  };
+  }, [present,setFiles]);
 
   // Fetch the master AES key from secure storage
   useEffect(() => {
@@ -134,9 +137,11 @@ const Manager: React.FC = () => {
 
   // Fetch root files from the backend using axios
   useEffect(() => {
-    if(!masterAesKey) return;
+    if(!masterAesKey){ 
+      return;
+    };
     fetchFolderFiles(currentFolder,masterAesKey);
-  }, [masterAesKey, fetchFolderFiles, currentFolder]);
+  }, [masterAesKey,  currentFolder]);
 
   console.log(files)
 
@@ -172,7 +177,7 @@ const Manager: React.FC = () => {
             setNavState({...navState, currentFolder : ROOT_FOLDER})
           }
         }
-        else if(navData.currentFolder.id = currentFolder.id){}
+        else if(navData.currentFolder.id === currentFolder.id){}
         else {
           setNavState(navData);
         }
