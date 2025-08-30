@@ -69,11 +69,6 @@ export async function decryptFileName(encryptedData: string, masterAesKey: Crypt
   // The rest is the ciphertext
   const ciphertext = uint8ArrayCombined.slice(12);
 
-  console.log("Master Key ---- ", masterAesKey);
-  console.log("Combined ArrayBuffer ---- ", uint8ArrayCombined);
-  console.log("IV ---- ", iv);
-  console.log("Ciphertext ---- ", ciphertext);
-
   try {
     // Decrypt the ciphertext with AES-GCM using the IV and master AES key
     const decryptedName = await crypto.subtle.decrypt(

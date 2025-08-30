@@ -165,7 +165,6 @@ class Folder(StorageEntity):
         self._meta.get_field('name_encrypted').help_text = "Folder name encrypted with drive mastery key"
         self._meta.get_field('ai_enabled').help_text = "Whether files in this folder are AI-searchable"
 
-
 class File(StorageEntity):
     """
     Individual files in the storage system
@@ -213,6 +212,7 @@ class File(StorageEntity):
         # Set help text for inherited fields
         self._meta.get_field('name_encrypted').help_text = "Original filename encrypted with drive master key"
         self._meta.get_field('ai_enabled').help_text = "Whether this file is AI-searchable"
+
     
 class DocumentChunk(models.Model):
     """

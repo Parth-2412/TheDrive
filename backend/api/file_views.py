@@ -41,14 +41,13 @@ def get_minio_client():
     if not minio_client.bucket_exists(MINIO_BUCKET):
         minio_client.make_bucket(MINIO_BUCKET)
 
-        
 # ============================================================================
 # SERIALIZERS
 # ============================================================================
 
 class FolderSerializer(serializers.ModelSerializer):
     """Serializer for folder operations"""
-    
+    parent = serializers.CharField()
     class Meta:
         model = Folder
         fields = ['id', 'name_encrypted', 'parent', 'ai_enabled', 'created_at', 'updated_at']
