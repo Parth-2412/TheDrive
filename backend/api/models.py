@@ -49,6 +49,7 @@ class DriveUser(AbstractBaseUser, PermissionsMixin):
         blank=True,
     )
 
+    whole_context_ai_enabled = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     last_login = models.DateTimeField(auto_now=True)
@@ -89,8 +90,8 @@ class AINode(models.Model):
         help_text="Whether this AI node is authorized by app owners"
     )
     
-    # Stats
-    total_users = models.IntegerField(default=0)
+    own_user_object = models.ForeignKey(DriveUser,null=True, on_delete=models.CASCADE, related_name='ai_node')
+
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -110,19 +111,8 @@ class StorageEntity(models.Model):
     # Encrypted name (encrypted with parent's key or user's root key)
     name_encrypted = models.TextField()
 
-    
     # AI settings
     ai_enabled = models.BooleanField(default=False)
-    ai_processing_status = models.CharField(
-        max_length=20,
-        choices=[
-            ('pending', 'Pending'),
-            ('processing', 'Processing'),
-            ('completed', 'Completed'),
-            ('failed', 'Failed'),
-        ],
-        default='pending'
-    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -209,10 +199,10 @@ class File(StorageEntity):
         indexes = [
             models.Index(fields=['user', 'folder']),
             models.Index(fields=['user', 'ai_enabled']),
-            models.Index(fields=['ai_processing_status']),
         ]
         unique_together = [('folder', 'name_encrypted')]
 
+        unique_together = [('folder', 'file_name_hash')]
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -220,7 +210,6 @@ class File(StorageEntity):
         self._meta.get_field('name_encrypted').help_text = "Original filename encrypted with drive master key"
         self._meta.get_field('ai_enabled').help_text = "Whether this file is AI-searchable"
 
-        unique_together = [('parent', 'file_name_hash')]
     
 class DocumentChunk(models.Model):
     """

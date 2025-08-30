@@ -97,6 +97,7 @@ const Manager: React.FC = () => {
                   name,  // Await the decryption
                   isDirectory: true,
                   path: get_path(name, currentFolder),
+                  updatedAt: folder.updated_at
                 }
               })
           );
@@ -111,6 +112,7 @@ const Manager: React.FC = () => {
               path: get_path(name, currentFolder),
               size: file.file_size,
               downloadUrl: file.download_url,
+              updatedAt: file.updated_at
             }
           })
         );
@@ -145,14 +147,20 @@ const Manager: React.FC = () => {
       present(showError());
       return;
     }
-    const updatedFiles = files.map(f => {
-    if (f.id === file.id) {
-      const updatedFile = { ...f, name: newName, path: f.path.split('/').slice(0, -1).concat(newName).join('/') }; // Update name and path
-      return updatedFile;
-    }
-    return f;
-  });
 
+    const newPath = file.path.split('/').slice(0,-1).concat(newName).join('/')
+    const updatedFiles = files.map(f => {
+      if(f.id == file.id){
+        const updatedFile = { ...f, name: newName, path : newPath};
+        return updatedFile;
+      }
+      if (f.path.startsWith(file.path)) {
+        const updatedFile = { ...f, path: f.path.replace(file.path,newPath) }; // Update name and path
+        return updatedFile;
+      }
+      return f;
+  });
+  const reverted_files = files;
   setFiles(updatedFiles);
   const new_name_hash = await generateSHA256Hash(newName)
   const encryptedName = await encryptName(newName, user.masterAesKey)
@@ -167,15 +175,8 @@ const Manager: React.FC = () => {
     
     }
     catch (error) {
-      const revertedFiles = files.map(f => {
-      if (f.id === file.id) {
-        const revertedFile = { ...f, name: file.name }; // revert to original name
-        return revertedFile;
-      }
-      return f;
-    });
-    setFiles(revertedFiles);
-    present(showError());
+      setFiles(reverted_files);
+      present(showError());
     }
   }
 

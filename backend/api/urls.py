@@ -25,4 +25,5 @@ urlpatterns = [
     path('files/<uuid:file_id>/copy/', file_views.copy_file, name='copy_file'),
     path('files/<uuid:file_id>/move/', file_views.move_file, name='move_file'),
     path('files/<uuid:file_id>/delete/', file_views.delete_file, name='delete_file'),
+    path('files/<uuid:file_id>/toggle/', file_views.toggle_ai_enable_file, name='toggle_ai_enable_file'),
 ]

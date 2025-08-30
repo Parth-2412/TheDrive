@@ -128,9 +128,13 @@ const App: React.FC = () => {
                 <Route render={() => <Redirect to='/login' />} />
               </>
             ) : (
-              <Route>
-                <Manager />
-              </Route>
+              <>
+                <Route path="/">
+                  <Manager />
+                </Route>
+                <Route render={() => <Redirect to='/' />} />
+              </>
+
             )
           }
          

@@ -17,9 +17,7 @@ const MnemonicForm: React.FC<{
 
   // Ensure mnemonic state updates when initialMnemonic changes
   useEffect(() => {
-    if (initialMnemonic) {
       setMnemonic(initialMnemonic);
-    }
   }, [initialMnemonic.join(' ')]);
 
   // Handle mnemonic change and auto-focus behavior
@@ -42,13 +40,24 @@ const MnemonicForm: React.FC<{
   // Handle keydown events for space and enter to shift focus
   const handleKeyDown = (index: number, event: React.KeyboardEvent) => {
     if (event.key === ' ' || event.key === 'Enter') {
-      setIndex(index < 11 ? index + 1 : index);
+      if(index == 11) return;
+      setIndex(index + 1);
     }
   };
 
+  useEffect(() => {
+    //@ts-expect-error
+      document.getElementById(`word-${index}`)?.setFocus()
+  }, [index])
+  const handlePaste = (event : React.ClipboardEvent<Element>) => {
+    event.preventDefault()
+    const new_arr = event.clipboardData.getData('text').split(' ');
+    if(new_arr.length != 12) return;
+    setMnemonic(new_arr)
+  }
   return (
     <div className="mnemonic-container">
-      <IonItem>
+      <IonItem onPaste={handlePaste} >
         <IonLabel position="floating">12-Word Mnemonic</IonLabel>
         <div
           className="mnemonic-grid"
@@ -60,10 +69,11 @@ const MnemonicForm: React.FC<{
               value={word}
               onIonInput={(e) => handleMnemonicChange(index, e.detail.value!)}
               onKeyDown={(e) => handleKeyDown(index, e)}  // Handle space/enter keydown events
+              onFocus={() => setIndex(index)}
               placeholder={`Word ${index + 1}`}
               maxlength={12}  // Limit to 12 characters per word
               style={{ textAlign: 'center' }}
-              onFocus={() => setIndex(index)}
+              onPaste={handlePaste}
             />
           ))}
         </div>
