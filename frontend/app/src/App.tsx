@@ -5,7 +5,7 @@ import { Route, Redirect } from 'react-router-dom'; // Using React Router v5
 import { useRecoilState } from 'recoil';
 import { userState } from './state/user';
 import { importAesKey } from './services/crypto.service';
-import { stringToUint8Array } from './services/helpers.service';
+import { stringToUint8Array, toBase64, uint8ArrayToString } from './services/helpers.service';
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 import { login_with_keys } from './services/auth.service';
 import Manager from './pages/Manager';
@@ -95,6 +95,9 @@ const App: React.FC = () => {
       if (!user.accessToken) {
         try {
           const tokens = await login_with_keys(user);
+          await SecureStoragePlugin.set({ key: 'privateKey', value : uint8ArrayToString(user.privateKey) })
+          await SecureStoragePlugin.set({ key: 'publicKey', value : uint8ArrayToString(user.publicKey) })
+          await SecureStoragePlugin.set({ key: 'masterKey', value : uint8ArrayToString(new Uint8Array(await crypto.subtle.exportKey("raw", user.masterAesKey))) })
           setUser({ ...user, ...tokens, ready: true });
         } catch (error) {
           console.error(error);

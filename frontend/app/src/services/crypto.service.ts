@@ -40,7 +40,7 @@ export async function deriveMasterKeyBytes(mnemonic: string, passphrase = '') {
 
 export async function importAesKey(raw: Uint8Array, usages: KeyUsage[] = ['encrypt','decrypt']) {
   return crypto.subtle.importKey(
-    'raw', raw, { name: 'AES-GCM' }, false, usages
+    'raw', raw, { name: 'AES-GCM' }, true, usages
   );
 }
 
