@@ -177,7 +177,7 @@ class File(StorageEntity):
     )
     
     # File belongs to a folder
-    folder = models.ForeignKey(Folder, on_delete=models.CASCADE, related_name='files')
+    folder = models.ForeignKey(Folder, on_delete=models.CASCADE, related_name='files', null=True)
     
     # File-specific fields
     file_size = models.BigIntegerField(help_text="File size in bytes")

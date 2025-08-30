@@ -34,13 +34,13 @@ def get_minio_client():
     """Get configured MinIO client"""
     minio_client = Minio(
         endpoint=os.getenv('MINIO_ENDPOINT'),
-        access_key=os.getenv('MINIO_ROOT_USER'),
-        secret_key=os.getenv('MINIO_ROOT_PASSWORD'),
+        access_key=os.getenv('MINIO_ACCESS_KEY'),
+        secret_key=os.getenv('MINIO_SECRET_KEY'),
         secure=os.getenv('MINIO_SECURE', 'False').lower() == 'true'
     )
     if not minio_client.bucket_exists(MINIO_BUCKET):
         minio_client.make_bucket(MINIO_BUCKET)
-
+    return minio_client
 # ============================================================================
 # SERIALIZERS
 # ============================================================================

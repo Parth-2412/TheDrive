@@ -26,7 +26,7 @@ const FileManager = ({
   onCreateFolder,
   onFileUploading = () => {},
   onFileUploaded = () => {},
-  onFileUpload = () => {},
+  onFileUpload,
   onCut,
   onCopy,
   onPaste,
@@ -141,6 +141,7 @@ const FileManager = ({
                     triggerAction={triggerAction}
                     permissions={permissions}
                     masterAesKey={masterAesKey}
+                    onFileUpload={onFileUpload}
                   />
                 </LayoutProvider>
               </ClipBoardProvider>

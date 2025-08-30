@@ -232,6 +232,7 @@ const Manager: React.FC = () => {
       initialPath=""
       fileUploadConfig={fileUploadConfig}
       onRename={handleFileRename}
+      onFileUpload={() => {}}
     />
   );
 };
