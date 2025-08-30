@@ -1,0 +1,17 @@
+langchain
+langchain_community
+langchain-huggingface
+pydantic-settings
+pypdf
+python-docx
+unstructured[pptx]
+unstructured-inference
+unstructured-pytesseract
+openpyxl
+pandas
+pytesseract
+Pillow
+pdfminer.six
+pi-heif
+pdf2image
+chromadb
