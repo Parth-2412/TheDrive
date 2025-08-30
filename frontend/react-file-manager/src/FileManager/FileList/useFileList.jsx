@@ -12,7 +12,7 @@ import { useFileNavigation } from "../../contexts/FileNavigationContext";
 import { duplicateNameHandler } from "../../utils/duplicateNameHandler";
 import { validateApiCallback } from "../../utils/validateApiCallback";
 import { useTranslation } from "../../contexts/TranslationProvider";
-
+import { TbSparkles } from "react-icons/tb";
 const useFileList = (onRefresh, enableFilePreview, triggerAction, permissions, onFileOpen) => {
   const [selectedFileIndexes, setSelectedFileIndexes] = useState([]);
   const [visible, setVisible] = useState(false);
@@ -65,6 +65,20 @@ const useFileList = (onRefresh, enableFilePreview, triggerAction, permissions, o
     setVisible(false);
     triggerAction.show("delete");
   };
+
+// In useFileList.jsx
+
+const handleAiModeToggle = () => {
+  setVisible(false);
+
+  setCurrentPathFiles(prevFiles => {
+    return prevFiles.map(file =>
+      file.path === lastSelectedFile.path
+        ? { ...file, isAiActive: !file.isAiActive } // 👈 toggle on/off
+        : file
+    );
+  });
+};
 
   const handleRefresh = () => {
     setVisible(false);
@@ -173,8 +187,7 @@ const useFileList = (onRefresh, enableFilePreview, triggerAction, permissions, o
       title: t("rename"),
       icon: <BiRename size={19} />,
       onClick: handleRenaming,
-      hidden: selectedFiles.length > 1,
-      hidden: !permissions.rename,
+      hidden: selectedFiles.length > 1 || !permissions.rename,
     },
     {
       title: t("download"),
@@ -182,6 +195,13 @@ const useFileList = (onRefresh, enableFilePreview, triggerAction, permissions, o
       onClick: handleDownloadItems,
       hidden: !permissions.download,
     },
+    {
+      title: lastSelectedFile?.isAiActive ? "Disable AI Mode" : "Enable AI Mode",
+      icon: <TbSparkles size={18} />,
+      onClick: handleAiModeToggle, // 👈 toggle function we defined
+      hidden: false,
+    }
+    ,
     {
       title: t("delete"),
       icon: <MdOutlineDelete size={19} />,
