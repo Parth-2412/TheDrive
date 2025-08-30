@@ -1,0 +1,66 @@
+[   {
+      "source_id": 1,
+      "file": "TheDrive.pdf",
+      "file_path": "C:\\Users\\asus\\AppData\\Local\\Temp\\tmpc1sqv1tq.pdf",
+      "page_number": 2,
+      "chunk_id": "a2821ef5c987",
+      "chunk_index": 9,
+      "char_start": 9000,
+      "char_end": 9130,
+      "scope": "hack",
+      "user_id": null,
+      "similarity": 0.469
+    },
+    {
+      "source_id": 2,
+      "file": "TheDrive.pdf",
+      "file_path": "C:\\Users\\asus\\AppData\\Local\\Temp\\tmpc1sqv1tq.pdf",
+      "page_number": 0,
+      "chunk_id": "f804b805e0ea",
+      "chunk_index": 0,
+      "char_start": 0,
+      "char_end": 996,
+      "scope": "hack",
+      "user_id": null,
+      "similarity": 0.465
+    },
+    {
+      "source_id": 3,
+      "file": "TheDrive.pdf",
+      "file_path": "C:\\Users\\asus\\AppData\\Local\\Temp\\tmpc1sqv1tq.pdf",
+      "page_number": 0,
+      "chunk_id": "67c469fd5654",
+      "chunk_index": 2,
+      "char_start": 2000,
+      "char_end": 2962,
+      "scope": "hack",
+      "user_id": null,
+      "similarity": 0.428
+    },
+    {
+      "source_id": 4,
+      "file": "TheDrive.pdf",
+      "file_path": "C:\\Users\\asus\\AppData\\Local\\Temp\\tmpc1sqv1tq.pdf",
+      "page_number": 0,
+      "chunk_id": "425f88385197",
+      "chunk_index": 1,
+      "char_start": 1000,
+      "char_end": 1993,
+      "scope": "hack",
+      "user_id": null,
+      "similarity": 0.344
+    },
+    {
+      "source_id": 5,
+      "file": "TheDrive.pdf",
+      "file_path": "C:\\Users\\asus\\AppData\\Local\\Temp\\tmpc1sqv1tq.pdf",
+      "page_number": 1,
+      "chunk_id": "5b78f5d7a552",
+      "chunk_index": 3,
+      "char_start": 3000,
+      "char_end": 3953,
+      "scope": "hack",
+      "user_id": null,
+      "similarity": 0.221
+    }
+]
