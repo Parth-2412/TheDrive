@@ -1,36 +1,28 @@
 # rag_pipeline.py
 """
-Retrieval-Augmented Generation (RAG) pipeline for the AI Node.
-Modular design: can be imported and used in orchestration scripts or APIs.
+Retrieval-Augmented Generation (RAG) pipeline for NeonDB integration.
+Works with PostgreSQL database instead of local vector store.
 """
-\
-from typing import List, Dict, Any
-from langchain_community.vectorstores import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
 
+from typing import List, Dict, Any
+import numpy as np
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
+from langchain_huggingface import HuggingFaceEmbeddings
+
 
 class RAGPipeline:
-
-    def run_with_chunks(self, query: str, chunks: list) -> dict:
+    def __init__(self, embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2", 
+                 gemini_model: str = "models/gemini-2.5-flash-lite"):
         """
-        Run the RAG pipeline using externally provided chunks (e.g., from DB by scope).
-        Each chunk should be a dict with 'chunk' (text) and 'meta' (metadata).
+        Initialize RAG pipeline for NeonDB integration.
+        No local vector store - everything comes from database.
         """
-        context_chunks = [
-            {"content": chunk["chunk"], "metadata": chunk["meta"]}
-            for chunk in chunks
-        ]
-        return self.generate_answer(query, context_chunks)
-    def __init__(self, vector_db_path: str, collection_name: str, embedding_model_name: str, gemini_model: str = "models/gemini-2.5-flash-lite"):
         self.embedding_model = HuggingFaceEmbeddings(model_name=embedding_model_name)
-        self.vector_store = Chroma(
-            persist_directory=vector_db_path,
-            collection_name=collection_name,
-            embedding_function=self.embedding_model
-        )
+        
         # Set up Gemini
         load_dotenv()
         api_key = os.getenv("GOOGLE_API_KEY")
@@ -39,45 +31,118 @@ class RAGPipeline:
         genai.configure(api_key=api_key)
         self.gemini = genai.GenerativeModel(gemini_model)
 
-    def retrieve_context(self, query: str, k: int = 3, drive: str = None, folder: str = None, file: str = None) -> List[Dict[str, Any]]:
-        """
-        Retrieve top-k relevant chunks for the query from the vector store, filtered by scope.
-        Returns a list of dicts with content and metadata.
-        """
-        results = self.vector_store.similarity_search(query, k=k)
-        filtered = []
-        for doc in results:
-            meta = doc.metadata
-            if drive and meta.get('drive') != drive:
-                continue
-            if folder and meta.get('folder') != folder:
-                continue
-            if file and meta.get('file') != file:
-                continue
-            filtered.append({
-                "content": doc.page_content,
-                "metadata": meta
-            })
-        return filtered
+    def cosine_similarity(self, a: List[float], b: List[float]) -> float:
+        """Calculate cosine similarity between two vectors."""
+        a = np.array(a)
+        b = np.array(b)
+        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-    def generate_answer(self, query: str, context_chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def retrieve_context_from_db(self, db_session: AsyncSession, query: str, 
+                                     scope: str, k: int = 5) -> List[Dict[str, Any]]:
         """
-        Run Gemini with the query and retrieved context.
-        Returns the answer and citations.
+        Retrieve top-k relevant chunks from NeonDB based on semantic similarity.
         """
-        context_text = "\n".join([chunk["content"] for chunk in context_chunks])
-        prompt = f"Answer the following question using the provided context.\nContext:\n{context_text}\n\nQuestion: {query}\nAnswer:"
+        # Generate query embedding
+        query_embedding = self.embedding_model.embed_query(query)
+        
+        # Fetch all chunks for the scope
+        result = await db_session.execute(
+            text("SELECT chunk, embedding, meta FROM ai_chunks WHERE LOWER(meta->>'scope') = LOWER(:scope)"),
+            {"scope": scope}
+        )
+        rows = result.mappings().all()
+        
+        if not rows:
+            return []
+        
+        # Calculate similarities and rank
+        chunks_with_similarity = []
+        for row in rows:
+            chunk_embedding = row["embedding"]  # Assuming this is already a list/array
+            similarity = self.cosine_similarity(query_embedding, chunk_embedding)
+            chunks_with_similarity.append({
+                "content": row["chunk"],
+                "metadata": row["meta"],
+                "similarity": similarity
+            })
+        
+        # Sort by similarity and return top-k
+        chunks_with_similarity.sort(key=lambda x: x["similarity"], reverse=True)
+        return chunks_with_similarity[:k]
+
+    def generate_answer(self, query: str, context_chunks: List[Dict[str, Any]], 
+                       memory: List[Dict] = None) -> Dict[str, Any]:
+        """
+        Generate answer using Gemini with context and chat history.
+        """
+        # Build context from chunks
+        context_text = "\n\n".join([
+            f"[Source: {chunk['metadata'].get('file', 'Unknown')}]\n{chunk['content']}"
+            for chunk in context_chunks
+        ])
+        
+        # Build memory context
+        memory_text = ""
+        if memory:
+            memory_text = "\n\nConversation History:\n" + "\n".join([
+                f"{msg['role'].upper()}: {msg['content']}" for msg in memory[-6:]  # Last 3 exchanges
+            ])
+        
+        # Create prompt
+        prompt = f"""You are a helpful AI assistant. Answer the user's question using the provided context and conversation history.
+
+Context from Documents:
+{context_text}
+{memory_text}
+
+Current Question: {query}
+
+Instructions:
+- Use the provided context to answer the question accurately
+- Reference specific sources when possible
+- If the context doesn't contain enough information, say so
+- Maintain consistency with the conversation history
+- Be concise but comprehensive
+
+Answer:"""
+
+        # Generate response
         response = self.gemini.generate_content(prompt)
         answer = response.text.strip() if hasattr(response, 'text') else str(response)
-        citations = [chunk["metadata"] for chunk in context_chunks]
+        
+        # Prepare citations
+        citations = [
+            {
+                "file": chunk["metadata"].get("file", "Unknown"),
+                "scope": chunk["metadata"].get("scope", "Unknown"),
+                "similarity": round(chunk.get("similarity", 0), 3)
+            }
+            for chunk in context_chunks
+        ]
+        
         return {
             "answer": answer,
-            "citations": citations
+            "citations": citations,
+            "context_chunks_used": len(context_chunks)
         }
 
-    def run(self, query: str, k: int = 3, drive: str = None, folder: str = None, file: str = None) -> Dict[str, Any]:
+    async def run_with_db(self, db_session: AsyncSession, query: str, scope: str, 
+                         memory: List[Dict] = None, k: int = 5) -> Dict[str, Any]:
         """
-        Full RAG pipeline: retrieve context (optionally scope-aware), generate answer, return with citations.
+        Full RAG pipeline using NeonDB:
+        1. Retrieve relevant chunks from database
+        2. Generate answer with context and memory
+        3. Return response with citations
         """
-        context_chunks = self.retrieve_context(query, k=k, drive=drive, folder=folder, file=file)
-        return self.generate_answer(query, context_chunks)
+        # Retrieve context from database
+        context_chunks = await self.retrieve_context_from_db(db_session, query, scope, k)
+        
+        if not context_chunks:
+            return {
+                "answer": f"I couldn't find any relevant information for scope '{scope}'. Please check if documents are available for this scope.",
+                "citations": [],
+                "context_chunks_used": 0
+            }
+        
+        # Generate answer
+        return self.generate_answer(query, context_chunks, memory)

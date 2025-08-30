@@ -19,7 +19,7 @@ import os
 from file_processor import FileProcessor
 from langchain_huggingface import HuggingFaceEmbeddings
 from db import SessionLocal
-from models import AIChunk
+from models import AIChunk, get_chat_memory, update_chat_memory
 from sqlalchemy.exc import SQLAlchemyError
 import asyncio
 
@@ -89,7 +89,8 @@ async def ingest(
     try:
         async with SessionLocal() as session:
             for doc, emb in zip(processed_docs, embeddings):
-                chunk_obj = AIChunk(chunk=doc.page_content, embedding=emb, meta=doc.metadata)
+                clean_chunk = doc.page_content.replace('\x00', '')
+                chunk_obj = AIChunk(chunk=clean_chunk, embedding=emb, meta=doc.metadata)
                 session.add(chunk_obj)
             await session.commit()
             # Retrieve IDs of inserted chunks
@@ -109,38 +110,74 @@ async def ingest(
 from fastapi import HTTPException
 from rag_pipeline import RAGPipeline
 # --- RAG Chat by Scope Endpoint ---
-class RAGRequest(BaseModel):
-    query: str
-    scope: str
 
-@app.post("/chat/scope")
-async def chat_scope(request: RAGRequest):
+class SessionChatRequest(BaseModel):
+    user_id: str
+    session_id: str
+    scope: str
+    query: str
+
+
+# --- Session-based Chat Endpoint ---
+@app.post("/chat/session")
+async def chat_session(request: SessionChatRequest):
     """
-    RAG chat endpoint: takes a query and a scope, fetches only chunks with that scope, runs RAG pipeline, returns answer.
+    Enhanced chat endpoint with NeonDB integration and semantic search.
     """
     try:
         async with SessionLocal() as session:
-            # Fetch all chunks for the given scope
-            result = await session.execute(
-                text("SELECT chunk, embedding, meta FROM ai_chunks WHERE LOWER(meta->>'scope') = LOWER(:scope)"),
-                {"scope": request.scope}
-            )
-            rows = result.mappings().all()
-            if not rows:
-                raise HTTPException(status_code=404, detail=f"No chunks found for scope '{request.scope}'")
-            # Use RAGPipeline to generate answer from these chunks
+            # Fetch chat memory for this user/session
+            chat_mem = await get_chat_memory(session, request.user_id, request.session_id)
+            memory = chat_mem.memory if chat_mem else []
+            
+            # Initialize RAG pipeline
             rag = RAGPipeline(
-                vector_db_path="AiNode/chroma_db",  # adjust if needed
-                collection_name="default",           # adjust if needed
                 embedding_model_name="sentence-transformers/all-MiniLM-L6-v2"
             )
-            rag_result = rag.run_with_chunks(request.query, rows)
-        return {
-            "query": request.query,
-            "scope": request.scope,
-            **rag_result,
-            "num_chunks": len(rows),
-        }
+            
+            # Run RAG with database integration
+            rag_result = await rag.run_with_db(
+                db_session=session,
+                query=request.query,
+                scope=request.scope,
+                memory=memory,
+                k=5  # Number of chunks to retrieve
+            )
+            
+            # Prepare conversation update
+            user_msg = {"role": "user", "content": request.query}
+            ai_msg = {"role": "ai", "content": rag_result.get("answer", "")}
+            updated_memory = memory + [user_msg, ai_msg]
+            
+            # Update or create chat memory
+            if chat_mem:
+                chat_mem.memory = updated_memory
+                chat_mem.scope = request.scope  # Update scope if changed
+                chat_mem.updated_at = __import__('datetime').datetime.utcnow()
+            else:
+                from models import ChatMemory
+                chat_mem = ChatMemory(
+                    user_id=request.user_id,
+                    session_id=request.session_id,
+                    scope=request.scope,
+                    memory=updated_memory,
+                    updated_at=__import__('datetime').datetime.utcnow()
+                )
+                session.add(chat_mem)
+            
+            await session.commit()
+            
+            return {
+                "user_id": request.user_id,
+                "session_id": request.session_id,
+                "scope": request.scope,
+                "query": request.query,
+                "answer": rag_result["answer"],
+                "citations": rag_result["citations"],
+                "context_chunks_used": rag_result["context_chunks_used"],
+                "memory_length": len(updated_memory)
+            }
+            
     except HTTPException as he:
         raise he
     except Exception as e:
