@@ -26,7 +26,7 @@ const FileManager = ({
   onCreateFolder,
   onFileUploading = () => {},
   onFileUploaded = () => {},
-  onFileUpload,
+  onFileUpload = () => {},
   onCut,
   onCopy,
   onPaste,
@@ -140,7 +140,6 @@ const FileManager = ({
                     acceptedFileTypes={acceptedFileTypes}
                     triggerAction={triggerAction}
                     permissions={permissions}
-                    masterAesKey={masterAesKey}
                     onFileUpload={onFileUpload}
                   />
                 </LayoutProvider>

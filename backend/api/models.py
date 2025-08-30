@@ -181,7 +181,6 @@ class File(StorageEntity):
     
     # File-specific fields
     file_size = models.BigIntegerField(help_text="File size in bytes")
-    file_type = models.CharField(max_length=255, help_text="File type/extension")
     
     # Additional AI processing field for files
     ai_processed_at = models.DateTimeField(null=True, blank=True)

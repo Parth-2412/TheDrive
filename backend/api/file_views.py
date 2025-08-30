@@ -520,7 +520,6 @@ def copy_file(request, file_id):
                     name_encrypted=new_name,
                     minio_path=new_minio_path,
                     file_size=file_record.file_size,
-                    file_type=file_record.file_type,
                     file_hash=file_record.file_hash,  # Same content, same hash
                     key_encrypted=serializer.validated_data.get('key_encrypted'),  
                     key_encrypted_iv=serializer.validated_data.get('key_encrypted_iv'),

@@ -39,7 +39,6 @@ const Actions = ({
           acceptedFileTypes={acceptedFileTypes}
           onFileUploading={onFileUploading}
           onFileUploaded={onFileUploaded}
-          masterAesKey={masterAesKey}
           onFileUpload={onFileUpload}
         />
       ),

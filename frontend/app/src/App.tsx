@@ -60,7 +60,7 @@ const App: React.FC = () => {
             
             // Make a request to your auth server to refresh the token.
             const response = await axiosInstance.post(`/api/auth/token/refresh`, {
-              refreshToken : user.refreshToken,
+              refresh_token : user.refreshToken,
             });
             const { access_token, refresh_token: newRefreshToken } = response.data;
             axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;

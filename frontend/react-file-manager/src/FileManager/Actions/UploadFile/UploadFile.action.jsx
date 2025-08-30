@@ -16,7 +16,6 @@ const UploadFileAction = ({
   acceptedFileTypes,
   onFileUploading,
   onFileUploaded,
-  masterAesKey,
   onFileUpload
 }) => {
   const [files, setFiles] = useState([]);
@@ -155,7 +154,6 @@ const UploadFileAction = ({
                 setIsUploading={setIsUploading}
                 onFileUploaded={onFileUploaded}
                 handleFileRemove={handleFileRemove}
-                masterAesKey={masterAesKey}
                 onFileUpload={onFileUpload}
               />
             ))}

@@ -11,6 +11,7 @@ import { useFiles } from "../../../contexts/FilesContext";
 import { useTranslation } from "../../../contexts/TranslationProvider";
 import axiosInstance from "../../../../../app/src/services/api.service"; // Import your Axios instance
 import encryptFile from '../../../../../app/src/services/encrypt.service';
+import { useFileNavigation } from "../../../contexts/FileNavigationContext";
 
 const UploadItem = ({
   index,
@@ -20,9 +21,10 @@ const UploadItem = ({
   fileUploadConfig,
   onFileUploaded,
   handleFileRemove,
-  masterAesKey,
+
   onFileUpload // New prop to handle file upload outside this component
 }) => {
+  const { currentFolder } = useFileNavigation()
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploaded, setIsUploaded] = useState(false);
   const [isCanceled, setIsCanceled] = useState(false);
@@ -30,7 +32,6 @@ const UploadItem = ({
   const fileIcons = useFileIcons(33);
   const { onError } = useFiles();
   const t = useTranslation();
-
   const handleUploadError = (error) => {
     setUploadProgress(0);
     setIsUploading((prev) => ({
@@ -42,7 +43,7 @@ const UploadItem = ({
       message: t("uploadFail"),
       error: error,
     };
-
+    console.log(errorMessage)
     setFiles((prev) =>
       prev.map((file, i) => {
         if (index === i) {
@@ -59,62 +60,37 @@ const UploadItem = ({
     onError(errorMessage, fileData.file);
   };
 
-  const fileUpload = (fileData) => {
+  const fileUpload = async (fileData) => {
     if (!!fileData.error) return;
 
     setIsUploading((prev) => ({
       ...prev,
       [index]: true,
     }));
+    console.log(fileData.file)
+    try {
 
+      await onFileUpload(fileData, currentFolder)
+      setIsUploaded(true);
+      setIsUploading((prev) => ({
+        ...prev,
+        [index]: false,
+      }));
+    }
+    catch(error){
+      setIsUploading((prev) => ({
+        ...prev,
+        [index]: false,
+      }));
+      handleUploadError(error);
+    }
     // Encrypt the file and send the encrypted data as JSON payload
-    encryptFile(fileData.file, masterAesKey)
-      .then((encryptedData) => {
-        const payload = {
-          file_data: encryptedData.ciphertext,
-          file_iv: encryptedData.file_iv,
-          key_encrypted: encryptedData.wrapped_key,
-          key_encrypted_iv: encryptedData.wrap_iv,
-          name_encrypted: encryptedData.filename,
-          mime: encryptedData.mime,
-        };
-        const jsonData = JSON.stringify(payload);
-
-        // Use Axios to send the encrypted data
-        axiosInstance
-          .post(fileUploadConfig?.url, jsonData, {
-            headers: {
-              "Content-Type": "application/json",
-              ...fileUploadConfig?.headers, // Add any other headers
-            },
-          })
-          .then((response) => {
-            setIsUploaded(true);
-            onFileUploaded(response.data);
-            setIsUploading((prev) => ({
-              ...prev,
-              [index]: false,
-            }));
-          })
-          .catch((error) => {
-            setIsUploading((prev) => ({
-              ...prev,
-              [index]: false,
-            }));
-            handleUploadError(error);
-          });
-      })
-      .catch((error) => {
-        setIsUploading((prev) => ({
-          ...prev,
-          [index]: false,
-        }));
-        handleUploadError(error);
-      });
+    
+      
   };
 
   useEffect(() => {
-    fileUpload(fileData);
+    fileUpload(fileData,currentFolder)
   }, []);
 
   const handleAbortUpload = () => {
@@ -178,12 +154,7 @@ const UploadItem = ({
             </div>
           )}
         </div>
-        <Progress
-          percent={uploadProgress}
-          isCanceled={isCanceled}
-          isCompleted={isUploaded}
-          error={fileData.error}
-        />
+        
       </div>
     </li>
   );

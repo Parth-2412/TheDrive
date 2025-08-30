@@ -2,45 +2,56 @@
 import { fromBase64, stringToUint8Array, toBase64, uint8ArrayToString } from './helpers.service';
 
 export default async function encryptFile(file: File, masterAesKey: CryptoKey) {
-  const fileArray = await file.arrayBuffer();
+    const fileArray = await file.arrayBuffer();
 
-  // 1) Generate fileKey (AES-GCM)
-  const fileKey = await crypto.subtle.generateKey(
-    { name: 'AES-GCM', length: 256 },
-    true,
-    ['encrypt','decrypt']
-  );
+    // 1) Generate fileKey (AES-GCM)
+    const fileKey = await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt','decrypt']
+    );
 
-  // 2) Encrypt file with fileKey
-  const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv, additionalData: undefined },
-    fileKey,
-    fileArray
-  );
-  const encryptedFileName = await crypto.subtle.encrypt(
-    {name: 'AES-GCM', iv, additionalData: undefined},
-    masterAesKey,
-    new TextEncoder().encode(file.name)
-  )
+    // 2) Encrypt file with fileKey
+    const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit
+    const ciphertext = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      fileKey,
+      fileArray
+    );
+    // Encrypt file name using master key
+    const fileNameBytes = new TextEncoder().encode(file.name);
+    const fileNameCiphertext = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      masterAesKey,
+      fileNameBytes
+    );
 
+    // 3) Ensure the first 12 bytes of the file name encryption output are the IV itself (unencrypted)
+    const encryptedFileNameArray = new Uint8Array(fileNameCiphertext);
+    const ivAndEncryptedFileName = new Uint8Array(12 + encryptedFileNameArray.length);
+
+    // Copy the IV into the first 12 bytes
+    ivAndEncryptedFileName.set(iv, 0);
+
+    // Copy the encrypted file name into the rest of the array
+    ivAndEncryptedFileName.set(encryptedFileNameArray, 12);
   // 3) Export raw fileKey and encrypt (wrap) it with masterAesKey
-  const fileKeyRaw = await crypto.subtle.exportKey('raw', fileKey); // ArrayBuffer
-  const wrapIv = crypto.getRandomValues(new Uint8Array(12));
-  const wrapped = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: wrapIv },
-    masterAesKey,
-    fileKeyRaw
-  );
-  // 4) Return payload to upload
-  return {
-    ciphertext: toBase64(ciphertext),
-    file_iv: toBase64(iv.buffer),
-    wrapped_key: toBase64(wrapped),
-    wrap_iv: toBase64(wrapIv.buffer),
-    filename: toBase64(encryptedFileName),
-    mime: file.type
-  };
+    const fileKeyRaw = await crypto.subtle.exportKey('raw', fileKey); // ArrayBuffer
+    const wrapIv = crypto.getRandomValues(new Uint8Array(12));
+    const wrapped = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: wrapIv },
+      masterAesKey,
+      fileKeyRaw
+    );
+    // 4) Return payload to upload
+    return {
+      ciphertext: toBase64(ciphertext),
+      file_iv: toBase64(iv.buffer),
+      wrapped_key: toBase64(wrapped),
+      wrap_iv: toBase64(wrapIv.buffer),
+      filename: toBase64(ivAndEncryptedFileName.buffer),
+      mime: file.type
+    };
 }
 
 export async function encryptName (name: string, masterAesKey: CryptoKey) {

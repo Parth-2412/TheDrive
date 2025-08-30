@@ -6,7 +6,7 @@ import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
 import { importAesKey } from "../services/crypto.service";
 import { actualstringToUint8Array, stringToUint8Array } from "../services/helpers.service";
 import axiosInstance from "../services/api.service"; // Import axios instance
-import { decryptFileName, encryptName } from "../services/encrypt.service";
+import encryptFile, { decryptFileName, encryptName } from "../services/encrypt.service";
 import { useIonToast } from '@ionic/react';
 import { showError } from "../util";
 import { RecoilState, useRecoilState } from "recoil";
@@ -125,7 +125,7 @@ const Manager: React.FC = () => {
 
   // Fetch the master AES key from secure storage
   
-  
+  const sentUploadRequests = new Set();
 
   // Fetch root files from the backend using axios
   useEffect(() => {
@@ -178,6 +178,45 @@ const Manager: React.FC = () => {
     }
   }
 
+  async function handleUpload(fileData: any, currentFolder : Folder) {
+    if(sentUploadRequests.has(fileData.name)) return;
+    sentUploadRequests.add(fileData.name);
+      
+    const encryptedData = await encryptFile(fileData.file, user.masterAesKey)
+
+    const payload = {
+      file_data: encryptedData.ciphertext,
+      file_iv: encryptedData.file_iv,
+      key_encrypted: encryptedData.wrapped_key,
+      key_encrypted_iv: encryptedData.wrap_iv,
+      name_encrypted: encryptedData.filename,
+    };
+
+    // Use Axios to send the encrypted data
+    try {
+      const response = await axiosInstance
+        .post(fileUploadConfig?.url, payload, {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+      sentUploadRequests.delete(fileData.name)
+      if(!currentFolder) currentFolder = ROOT_FOLDER
+      const file : File = {
+        ...response.data,
+        path : get_path(fileData.name, currentFolder),
+        name : fileData.file.name,
+        isDirectory: false,
+      }
+    
+      setFiles(currFiles => [...currFiles, file ])          
+    }
+    catch (error){
+      sentUploadRequests.delete(fileData.name);
+      throw error;
+    }
+             
+  }
   const handleCreateFolder = async (newName: string, currentFolder : Folder | null) => {
 
     if(!currentFolder){
@@ -201,7 +240,6 @@ const Manager: React.FC = () => {
     }
   }
 
-  // const handleFileUpload = async ()
 
   return (
     <FileManager 
@@ -222,7 +260,8 @@ const Manager: React.FC = () => {
       initialPath=""
       fileUploadConfig={fileUploadConfig}
       onRename={handleFileRename}
-      onFileUpload={() => {}}
+      //@ts-expect-error
+      onFileUpload={handleUpload}
     />
   );
 };
