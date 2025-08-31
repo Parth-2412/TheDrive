@@ -17,6 +17,7 @@ const FileList = ({
   enableFilePreview,
   triggerAction,
   permissions,
+  onAiModeChange
 }) => {
   const { currentPathFiles, sortConfig, setSortConfig } = useFileNavigation();
   const filesViewRef = useRef(null);
@@ -34,7 +35,7 @@ const FileList = ({
     selectedFileIndexes,
     clickPosition,
     isSelectionCtx,
-  } = useFileList(onRefresh, enableFilePreview, triggerAction, permissions, onFileOpen);
+  } = useFileList(onRefresh, enableFilePreview, triggerAction, permissions, onFileOpen, onAiModeChange);
 
   const contextMenuRef = useDetectOutsideClick(() => setVisible(false));
 

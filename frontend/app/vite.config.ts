@@ -8,8 +8,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [
     react(),
-    legacy(),
-    tailwindcss()
+    legacy()
   ],
   resolve: {
     alias: {

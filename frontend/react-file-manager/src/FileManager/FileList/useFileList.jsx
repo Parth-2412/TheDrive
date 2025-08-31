@@ -13,7 +13,7 @@ import { duplicateNameHandler } from "../../utils/duplicateNameHandler";
 import { validateApiCallback } from "../../utils/validateApiCallback";
 import { useTranslation } from "../../contexts/TranslationProvider";
 import { TbSparkles } from "react-icons/tb";
-const useFileList = (onRefresh, enableFilePreview, triggerAction, permissions, onFileOpen) => {
+const useFileList = (onRefresh, enableFilePreview, triggerAction, permissions, onFileOpen, onAiModeChange) => {
   const [selectedFileIndexes, setSelectedFileIndexes] = useState([]);
   const [visible, setVisible] = useState(false);
   const [isSelectionCtx, setIsSelectionCtx] = useState(false);
@@ -70,14 +70,7 @@ const useFileList = (onRefresh, enableFilePreview, triggerAction, permissions, o
 
 const handleAiModeToggle = () => {
   setVisible(false);
-
-  setCurrentPathFiles(prevFiles => {
-    return prevFiles.map(file =>
-      file.path === lastSelectedFile.path
-        ? { ...file, isAiActive: !file.isAiActive } // 👈 toggle on/off
-        : file
-    );
-  });
+  onAiModeChange(selectedFiles);
 };
 
   const handleRefresh = () => {
@@ -196,7 +189,7 @@ const handleAiModeToggle = () => {
       hidden: !permissions.download,
     },
     {
-      title: lastSelectedFile?.isAiActive ? "Disable AI Mode" : "Enable AI Mode",
+      title: lastSelectedFile?.ai_enabled ? "Disable AI Mode" : "Enable AI Mode",
       icon: <TbSparkles size={18} />,
       onClick: handleAiModeToggle, // 👈 toggle function we defined
       hidden: false,
