@@ -113,8 +113,12 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('POSTGRES_DB'),  # From .env file
+        'USER': os.getenv('POSTGRES_USER'),  # From .env file
+        'PASSWORD': os.getenv('POSTGRES_PASSWORD'),  # From .env file
+        'HOST': os.getenv('POSTGRES_HOST', 'localhost'),  # 'postgres' service in Docker
+        'PORT': '5432',  # Default PostgreSQL port
     }
 }
 
