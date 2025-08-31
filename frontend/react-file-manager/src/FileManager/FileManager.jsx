@@ -55,7 +55,8 @@ const FileManager = ({
   collapsibleNav = false,
   defaultNavExpanded = true,
   masterAesKey,
-  onAiModeChange
+  onAiModeChange,
+  onDecryption
 }) => {
   const [isNavigationPaneOpen, setNavigationPaneOpen] = useState(defaultNavExpanded);
   const triggerAction = useTriggerAction();
@@ -144,6 +145,8 @@ const FileManager = ({
                     triggerAction={triggerAction}
                     permissions={permissions}
                     onFileUpload={onFileUpload}
+                    onDownload={onDownload}
+                    onDecryption={onDecryption}
                   />
                 </LayoutProvider>
               </ClipBoardProvider>

@@ -20,9 +20,14 @@
     "semantic-release": "semantic-release"
   },
   "dependencies": {
+    "@cyntler/react-doc-viewer": "^1.17.0",
+    "docx-preview": "^0.3.6",
     "i18next": "^25.0.0",
+    "mammoth": "^1.10.0",
+    "pptx2html": "^0.3.4",
     "react-collapsed": "^4.2.0",
-    "react-icons": "^5.4.0"
+    "react-icons": "^5.4.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
