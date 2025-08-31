@@ -3,6 +3,7 @@ from rest_framework import routers
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from .auth_views import AuthenticationViewSet
 from . import file_views
+from . import node_views
 router = routers.DefaultRouter(trailing_slash=False)
 router.register('', AuthenticationViewSet, basename='auth')
 
