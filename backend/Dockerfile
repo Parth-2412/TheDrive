@@ -19,5 +19,5 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 EXPOSE 8000
 
 # Run Django development server (adjust for production if needed)
-CMD ["sh", "-c", "python3 manage.py makemigrations && python3 manage.py migrate && python3 manage.py runserver 0.0.0.0:8000"]
+CMD ["sh", "-c", "python3 manage.py makemigrations api && python3 manage.py migrate && python3 manage.py runserver 0.0.0.0:8000"]
 

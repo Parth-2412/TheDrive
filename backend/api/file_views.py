@@ -441,7 +441,7 @@ def download_file(request, file_id):
         minio_client = get_minio_client()
 
         # Fetch file object from MinIO
-        response = minio_client.get_object(MINIO_BUCKET, file_record.minio_path)
+        response = minio_client.get_object(MINIO_BUCKET, f"{file_record.id}.enc")
         file_bytes = response.read()
         response.close()
         response.release_conn()
