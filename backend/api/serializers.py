@@ -1,4 +1,4 @@
-from .models import DriveUser, AuthNonce
+from .models import DriveUser, AuthNonce, DocumentChunk
 from rest_framework import serializers
 
 class DriveUserSerializer(serializers.ModelSerializer):
@@ -11,9 +11,6 @@ class NonceSerializer(serializers.ModelSerializer):
         model = AuthNonce
         fields = ['nonce', 'challenge_message', 'expires_at']
         read_only_fields = ['nonce', 'challenge_message', 'expires_at']
-
-from rest_framework import serializers
-from .models import DocumentChunk, AINode
 
 class DocumentChunkSerializer(serializers.ModelSerializer):
     """Serializer for document chunks and their embeddings."""

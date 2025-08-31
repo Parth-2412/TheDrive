@@ -1,42 +1,63 @@
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import DocumentChunk, File, Folder
+from django.http import Http404
+from .models import DocumentChunk, File, Folder, DriveUser, AINode, DocumentChunk
 from .serializers import DocumentChunkSerializer
 from drf_spectacular.utils import extend_schema
 from django.shortcuts import get_object_or_404
+from rest_framework import serializers
+class ActionSerializer(serializers.Serializer):
+    user_public_key = serializers.UUIDField(help_text="The user the AI node's searching for")
+
+class GetFilesChunksSerializer(ActionSerializer):
+   files = serializers.ListField(
+       child=serializers.UUIDField(),
+       allow_empty=False,
+       help_text="List of file UUIDs to get chunks for"
+   )
+
+class StoreFilesChunksSerializer(ActionSerializer):
+   chunks = serializers.ListField(
+       child=DocumentChunkSerializer,
+       allow_empty=False,
+       help_text="Chunks to store"
+   )
+   file_id = serializers.UUIDField(help_text="The file uuid to store chunks for")
+
+class GetFolderChunksSerializer(ActionSerializer):
+   folder_id = serializers.CharField(help_text="The folder uuid to get chunks for")
+
+def get_user_for_ai_node(public_key : str, ai_node: AINode):
+    return get_object_or_404(DriveUser, public_key=public_key, preferred_ai_node=ai_node)
 
 @extend_schema(
     operation_id='store_chunk',
     summary='Store chunks and embeddings for a file',
     description='Store document chunks and their AI-generated embeddings for a file.',
-    request=DocumentChunkSerializer,
+    request=StoreFilesChunksSerializer,
     responses={201: DocumentChunkSerializer},
     tags=['Chunks']
 )
 @api_view(['POST'])
-def store_chunks(request, file_id):
+def store_chunks(request):
     """
     Store the chunks and their embeddings for a given file.
     """
-    file = get_object_or_404(File, id=file_id, user=request.user)
-    
-    # Validate the file and check if the file is AI-enabled for embedding processing
-    if not file.ai_enabled:
-        return Response(
-            {'error': 'AI processing is not enabled for this file'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    serializer = DocumentChunkSerializer(data=request.data, context={'request': request, 'file': file})
+    serializer = StoreFilesChunksSerializer(data=request.data)
     if serializer.is_valid():
-        serializer.save(file=file)
+        user = get_user_for_ai_node(serializer.validated_data['public_key'], request.user)
+        file = get_object_or_404(File, id=serializer.validated_data['file_id'], user=user)
+        if not file.ai_enabled:
+            return Response(
+                {'error': 'AI processing is not enabled for this file'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        #TODO: save the chunks
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-from .models import DocumentChunk
+    
 
 def get_chunks_for_folder(folder_id, user):
     """
@@ -44,12 +65,12 @@ def get_chunks_for_folder(folder_id, user):
     Returns a RawQuerySet of DocumentChunk instances.
     """
     if folder_id is None:
-        # NOTE: Use the actual table names Django creates (e.g., 'yourapp_documentchunk')
+
         sql_query = """
             SELECT dc.*
             FROM api_document_chunk dc
             INNER JOIN api_file f ON dc.file_id = f.id
-            WHERE f.user_id = %s;
+            WHERE f.user_id = %s AND f.ai_enabled = true; 
         """
         params = [user.id]
     else:
@@ -66,41 +87,93 @@ def get_chunks_for_folder(folder_id, user):
             SELECT dc.*
             FROM api_document_chunk dc
             INNER JOIN api_file f ON dc.file_id = f.id
-            WHERE f.folder_id IN (SELECT id FROM folder_tree);
+            WHERE f.folder_id IN (SELECT id FROM folder_tree) AND f.ai_enabled = true;
         """
         params = [folder_id, user.id]
 
-    # This one line replaces your entire manual loop.
-    # It's safer, cleaner, and the idiomatic Django way.
+
     return DocumentChunk.objects.raw(sql_query, params)
 
 @extend_schema(
-    operation_id='get_chunks_for_context',
-    summary='Get chunks/embeddings for a given context (folder/file)',
-    description='Get document chunks and their embeddings for the given file or folder context.',
+    operation_id='get_chunks_for_folder',
+    summary='Get chunks/embeddings for a given folder',
+    description='Get document chunks and their embeddings for the given folder',
+    request=GetFolderChunksSerializer,
     responses={200: DocumentChunkSerializer(many=True)},
     tags=['Chunks']
 )
 @api_view(['GET'])
-def get_chunks(request, context_id):
+def get_chunks_folder(request):
     """
     Get chunks and embeddings for a given file or folder.
     """
-    # Determine if context_id refers to a file or folder
-    if context_id == "null":
-        chunk_data = get_chunks_for_folder(None, request.user)
-    try:
-        folder = Folder.objects.get(id=context_id, user=request.user)
-        # If it's a folder, get chunks for all files in the folder (recursively)
-        chunk_data = get_chunks_for_folder(folder.id, request.user)
-    except Folder.DoesNotExist:
-        try:
-            file = File.objects.get(id=context_id, user=request.user)
-            # If it's a file, return the chunks for that file
-            chunk_data = DocumentChunk.objects.filter(file=file)
-        except File.DoesNotExist:
-            return Response({"error": "Invalid context ID"}, status=status.HTTP_400_BAD_REQUEST)
+    serializer = StoreFilesChunksSerializer(data=request.data)
+    if serializer.is_valid():
+        user = get_user_for_ai_node(serializer.validated_data['public_key'], request.user)
+        folder_id = serializer.validated_data["folder_id"]
+        # Determine if context_id refers to a file or folder
+        chunk_data = None
+        if folder_id == "root":
+            chunk_data = get_chunks_for_folder(None, user)
+        else:
+            chunk_data = get_chunks_for_folder(folder_id, user)
+        
+
+        return Response(DocumentChunkSerializer(chunk_data, many=True).data)
+
+
+
+@extend_schema(
+    operation_id='get_chunks_for_files',
+    summary='Get chunks/embeddings for the given files',
+    description='Get document chunks and their embeddings for the given files',
+    request=GetFilesChunksSerializer,
+    responses={200: DocumentChunkSerializer(many=True)},
+    tags=['Chunks']
+)
+@api_view(['GET'])
+def get_chunks_files(request):
+    """
+    Get chunks and embeddings for the given files
+    """
+    serializer = GetFilesChunksSerializer(data=request.data)
+    if serializer.is_valid():
+        user = get_user_for_ai_node(serializer.validated_data['public_key'], request.user)
+        file_ids = serializer.validated_data['files']
+        valid_file_ids = File.objects.filter(user=user, file_id__in=file_ids).values_list('file_id', flat=True)
+        if len(valid_file_ids) < len(file_ids):
+            return Response({"error" : ""})
+        chunks = DocumentChunk.objects.filter(file_id__in=valid_file_ids)
+        chunk_serializer = DocumentChunkSerializer(chunks, many=True)
+        return Response(chunk_serializer.data)
+    else:
+        return Response(serializer.errors, status=400)
     
-    # Serialize and return the chunk data
-    serializer = DocumentChunkSerializer(chunk_data, many=True)
-    return Response(serializer.data)
+class YesNoResponseSerializer(serializers.Serializer):
+    response = serializers.ChoiceField(choices=['yes', 'no'])
+
+@extend_schema(
+    operation_id='get_chunks_for_files',
+    summary='Get chunks/embeddings for the given files',
+    description='Get document chunks and their embeddings for the given files',
+    request=ActionSerializer,
+    responses={200 : YesNoResponseSerializer},
+    tags=['Chunks']
+)
+@api_view(['GET'])
+def check_if_user(request):
+    """
+    Check if there exists a user 
+    """
+    serializer = ActionSerializer(data=request.data)
+    if serializer.is_valid():
+        try:
+            get_user_for_ai_node(serializer.validated_data['public_key'], request.user)
+            return Response({"response" : "yes"})
+        except Http404 as e:
+            return Response({"response" : "no"})
+        except Exception as e:
+            raise e
+        
+    else:
+        return Response(serializer.errors, status=400)

@@ -49,8 +49,6 @@ class DriveUser(AbstractBaseUser, PermissionsMixin):
         blank=True,
     )
 
-    whole_context_ai_enabled = models.BooleanField(default=False)
-
     created_at = models.DateTimeField(auto_now_add=True)
     last_login = models.DateTimeField(auto_now=True)
 
@@ -90,7 +88,7 @@ class AINode(models.Model):
         help_text="Whether this AI node is authorized by app owners"
     )
     
-    own_user_object = models.ForeignKey(DriveUser,null=True, on_delete=models.CASCADE, related_name='ai_node')
+    own_user_object = models.OneToOneField(DriveUser,null=True, on_delete=models.CASCADE, related_name='ai_node')
 
     
     created_at = models.DateTimeField(auto_now_add=True)
@@ -110,9 +108,6 @@ class StorageEntity(models.Model):
     
     # Encrypted name (encrypted with parent's key or user's root key)
     name_encrypted = models.TextField()
-
-    # AI settings
-    ai_enabled = models.BooleanField(default=False)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -149,7 +144,6 @@ class Folder(StorageEntity):
         db_table = 'folders'
         indexes = [
             models.Index(fields=['user', 'parent']),
-            models.Index(fields=['user', 'ai_enabled']),
         ]
         unique_together = [('parent', 'folder_name_hash')]
     
@@ -157,7 +151,6 @@ class Folder(StorageEntity):
         super().__init__(*args, **kwargs)
         # Set help text for inherited fields
         self._meta.get_field('name_encrypted').help_text = "Folder name encrypted with drive mastery key"
-        self._meta.get_field('ai_enabled').help_text = "Whether files in this folder are AI-searchable"
 
 class File(StorageEntity):
     """
@@ -193,6 +186,7 @@ class File(StorageEntity):
     key_encrypted = models.TextField(help_text = "This file's symmetric key encrypted with the drive master key, in base64 format")
     file_iv = models.TextField(help_text = "In base64")
     key_encrypted_iv = models.TextField(help_text = "In base64")
+    ai_enabled = models.BooleanField(default=False,help_text = "Whether this file is AI-searchable")
 
     class Meta:
         db_table = 'files'
@@ -208,7 +202,6 @@ class File(StorageEntity):
         super().__init__(*args, **kwargs)
         # Set help text for inherited fields
         self._meta.get_field('name_encrypted').help_text = "Original filename encrypted with drive master key"
-        self._meta.get_field('ai_enabled').help_text = "Whether this file is AI-searchable"
 
     
 class DocumentChunk(models.Model):

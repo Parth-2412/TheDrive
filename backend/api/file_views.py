@@ -51,7 +51,7 @@ class FolderSerializer(serializers.ModelSerializer):
     parent = serializers.CharField()
     class Meta:
         model = Folder
-        fields = ['id', 'name_encrypted', 'parent', 'ai_enabled', 'created_at', 'updated_at', 'folder_name_hash']
+        fields = ['id', 'name_encrypted', 'parent', 'created_at', 'updated_at', 'folder_name_hash']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def validate_parent(self, value):
@@ -231,7 +231,6 @@ def create_folder(request):
                 name_encrypted=serializer.validated_data['name_encrypted']              ,
                 parent_id=serializer.validated_data.get('parent'),
                 folder_name_hash=serializer.validated_data.get('folder_name_hash'),
-                ai_enabled=serializer.validated_data.get('ai_enabled', False),
             )
             
             
@@ -379,31 +378,6 @@ def move_folder(request, folder_id):
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-@extend_schema(
-    operation_id='toggle_ai_enable_folder',
-    summary='Toggle AI enabled on/off on a folder',
-    description='Toggle AI enabled on/off on a folder',
-
-    tags=['Folders']
-)
-@api_view(['PATCH'])
-def toggle_ai_enable_folder(request, folder_id):
-    """List contents of a folder"""
-    if folder_id == 'root':
-        request.user.whole_context_ai_enabled = not request.user.whole_context_ai_enabled
-        request.user.save()
-        return Response(status=200)
-
-    folder = get_object_or_404(Folder,id=folder_id,user=request.user)
-    try:
-        folder.ai_enabled = not folder.ai_enabled
-        folder.save()
-        return Response(status=200)
-    except Exception as error:
-        return Response(
-            {'error': f'Failed to update file: {str(error)}'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
     
 # ============================================================================
 # FILE ENDPOINTS
@@ -631,25 +605,3 @@ def delete_file(request, file_id):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
-
-@extend_schema(
-    operation_id='toggle_ai_enable_file',
-    summary='Toggle AI enabled on/off on a file',
-    description='Toggle AI enabled on/off on a file',
-    responses={200: FileSerializer},
-    tags=['Files']
-)
-@api_view(['PATCH'])
-def toggle_ai_enable_file(request, file_id):
-    """List contents of a folder"""
-
-    file = get_object_or_404(File,id=file_id,user=request.user)
-    try:
-        file.ai_enabled = not file.ai_enabled
-        file.save()
-        return Response(FileSerializer(file).data, 200)
-    except Exception as error:
-        return Response(
-            {'error': f'Failed to update file: {str(error)}'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
