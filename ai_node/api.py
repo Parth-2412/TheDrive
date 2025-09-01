@@ -35,6 +35,8 @@ import shutil
 import datetime
 import base64
 from collections import defaultdict
+from pydantic.generics import GenericModel
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -351,7 +353,7 @@ class ServerService:
 
 T = TypeVar('T', bound=BaseModel)
 
-class SignedRequest(BaseModel, Generic[T]):
+class SignedRequest(GenericModel, Generic[T]):
     """
     Wrapper for signed requests that contain:
     - public_key: hex encoded public key
@@ -375,6 +377,8 @@ class SignedRequest(BaseModel, Generic[T]):
     @classmethod
     def validate_signature_format(cls, v):
         try:
+            if len(v) % 2 != 0:
+                raise ValueError()
             bytes.fromhex(v)
             return v
         except ValueError:
@@ -395,49 +399,41 @@ async def verify_user_signature(signed_request: SignedRequest[T]) -> T:
     Raises:
         HTTPException: If signature verification fails
     """
+    # Get the components
+    public_key_hex = signed_request.public_key
+    signature_hex = signed_request.signature
+    data = signed_request.data
+    
+    # Convert hex to bytes
+    public_key_bytes = bytes.fromhex(public_key_hex)
+    signature_bytes = bytes.fromhex(signature_hex)
+    
+    # Create the message that was signed (JSON string of data, sorted for consistency)
+    message_to_verify = data.model_dump_json()
+    # Verify the signature
     try:
-        # Get the components
-        public_key_hex = signed_request.public_key
-        signature_hex = signed_request.signature
-        data = signed_request.data
-        
-        # Convert hex to bytes
-        public_key_bytes = bytes.fromhex(public_key_hex)
-        signature_bytes = bytes.fromhex(signature_hex)
-        
-        # Create the message that was signed (JSON string of data, sorted for consistency)
-        message_to_verify = json.dumps(
-            data, 
-            sort_keys=True, 
-            separators=(',', ':')
-        )
+        verify_key = nacl.signing.VerifyKey(public_key_bytes)
         
         # Verify the signature
-        try:
-            verify_key = nacl.signing.VerifyKey(public_key_bytes)
-            
-            # Verify the signature
-            verify_key.verify(
-                message_to_verify.encode('utf-8'),
-                signature_bytes,
-                encoder=nacl.encoding.HexEncoder
-            )
-            
-            logger.info(f"Signature verification successful for public key: {public_key_hex[:16]}...")
-            
-            # Return the verified data
-            return data
-            
-        except nacl.exceptions.BadSignatureError:
-            logger.warning(f"Signature verification failed for public key: {public_key_hex[:16]}...")
-            raise HTTPException(status_code=401, detail="Invalid signature")
-        except Exception as e:
-            logger.error(f"Signature verification error: {e}")
-            raise HTTPException(status_code=400, detail=f"Signature verification failed: {str(e)}")
-            
+        verify_key.verify(
+            message_to_verify.encode('utf-8'),
+            signature_bytes,
+            encoder=nacl.encoding.HexEncoder
+        )
+        
+        logger.info(f"Signature verification successful for public key: {public_key_hex[:16]}...")
+        
+        # Return the verified data
+        return data
+        
+    except nacl.exceptions.BadSignatureError:
+        logger.warning(f"Signature verification failed for public key: {public_key_hex[:16]}...")
+        raise HTTPException(status_code=401, detail="Invalid signature")
     except Exception as e:
-        logger.error(f"Unexpected error in signature verification: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error during verification")
+        logger.error(f"Signature verification error: {e}")
+        raise HTTPException(status_code=400, detail=f"Signature verification failed: {str(e)}")
+            
+    
     
 # Global instances
 service: Optional[ServerService] = None
@@ -729,6 +725,7 @@ async def chat(
     auth: ServerService = Depends(ensure_authenticated)
 ):
     """Chat with the loaded session data"""
+
     request = await verify_user_signature(signed_request)
     db_session = None
     
