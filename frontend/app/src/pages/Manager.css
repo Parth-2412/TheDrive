@@ -15,7 +15,7 @@
 
 .file-explorer {
     height: 100vh !important;
-    scrollbar-width: none;
+    scrollbar-width: none !important;
 }
 .folders-preview {
     width : 100% !important;
@@ -33,27 +33,43 @@
     min-height: 50px !important;
     max-height: none !important;
     height: auto !important;
-    display: flex;
-    justify-content: center;
 }
 
-.file-action-container, .fm-toolbar {
+.file-action-container {
     margin: auto;
     width: 100%;
 }
-
-.file-action-container, .fm-toolbar > :first-child {
-    overflow-x: scroll;
+.fm-toolbar {
+    margin: auto;
+    width: 100%;
 }
 
 .file-action-container > :first-child  {
     overflow-x: scroll;
     scrollbar-width: none;
 }
-.file-action-container, .fm-toolbar > :first-child:-webkit-scrollbar {
+.fm-toolbar > :first-child  {
+    overflow-x: scroll;
+    scrollbar-width: none;
+}
+
+.file-action-container > :first-child:-webkit-scrollbar {
   display: none;          /* for Chrome, Safari, Edge */
 }
 
-.file-action-container, .fm-toolbar > :first-child > button  {
+.fm-toolbar > :first-child:-webkit-scrollbar {
+  display: none;          /* for Chrome, Safari, Edge */
+}
+
+.file-action-container > :first-child > button  {
     white-space: nowrap;
+}
+.fm-toolbar > :first-child > button  {
+    white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+    .file-explorer {
+        width: calc(100% - max(var(--side-min-width), var(--side-max-width))) !important;
+    }
 }

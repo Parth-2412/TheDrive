@@ -84,9 +84,9 @@ const ChatApp: React.FC = () => {
       el: dragRef.current,
       gestureName: 'drag-chat',
       direction: 'y',
-      threshold: 25,
+      threshold: 15,
       onMove: (event) => {
-        if (event.deltaY > 60) {
+        if (event.deltaY > 40) {
           setIsChatOpen(false)
         }
       },
@@ -111,7 +111,6 @@ const ChatApp: React.FC = () => {
           @media (max-width: 768px) {
               .file-explorer {
               height: calc(100vh - var(--chat-height)) !important;
-              // overflow-y: scroll;
             }
           }
         `}
