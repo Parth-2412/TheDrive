@@ -34,5 +34,5 @@ urlpatterns = [
     path('chunks/store/', node_views.store_chunks, name='store_chunks'),
     path('chunks/folder/', node_views.get_chunks_folder, name='get_chunks_folder'),
     path('chunks/files/', node_views.get_chunks_files, name='get_chunks_files'),
-    path('is_user/¯', node_views.check_if_user, name='is_user'),
+    path('is_user', node_views.check_if_user, name='is_user'),
 ]

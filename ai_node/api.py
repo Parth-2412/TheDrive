@@ -422,8 +422,7 @@ async def verify_user_signature(signed_request: SignedRequest[T]) -> T:
             message_to_verify.encode('utf-8'),
             signature_bytes,
         )
-        response = await service.get(f'/api/is_user/?public_key={public_key_hex}')
-        print(response.json())
+        response = await service.get(f'/api/is_user?public_key={public_key_hex}')
         if response.json()["response"] != "yes":
                 raise HTTPException(status_code=404, detail="User not found")
         logger.info(f"Signature verification successful for public key: {public_key_hex[:16]}...")
@@ -611,16 +610,26 @@ async def ingest(
         clean_chunk = doc.page_content.replace('\x00', '')
         
         chunk_obj = {
-            "chunk": encrypt_input(clean_chunk, master_aes_key=service.master_key), 
-            "embedding": encrypt_input_bytes(np.array(emb, dtype=np.float32).tobytes(), master_aes_key=service.master_key), 
+            "chunk_content_encrypted": encrypt_input(clean_chunk, master_aes_key=service.master_key), 
+            "embedding_encrypted": encrypt_input_bytes(np.array(emb, dtype=np.float32).tobytes(), master_aes_key=service.master_key), 
         }
         chunk_obj.update(doc.metadata)
         chunks.append(chunk_obj)
 
 
 
-    payload = {"chunks": chunks, "file_id" : file_id}
-    await service.post('/api/chunks/store/', json=payload )
+    payload = {"chunks": chunks, "file_id" : file_id, "public_key" : signed_request.public_key }
+
+    res = None
+    try:
+        res = await service.post('/api/chunks/store/', json=payload )
+        res.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        print(f"Error status code: {exc.response.status_code}")
+        raise exc
+    except httpx.RequestError as exc:
+        print(f"An error occurred during the request: {exc}")
+        raise exc
     return {
         "filename": filename,
         "file_id": file_id,

@@ -71,9 +71,9 @@ class FileProcessor:
                 # Cross-referencing metadata
                 chunk.metadata.update({
                     # File identification for source attribution
-                    'chunk_index': chunk_index,
-                    'char_start': char_start,
-                    'char_end': char_end,
+                    'order_in_file': chunk_index,
+                    'chunk_start': char_start,
+                    'chunk_end': char_end,
                 })
             
             logging.info(f"Processed {file_name}: {len(chunked_docs)} chunks with cross-reference metadata")

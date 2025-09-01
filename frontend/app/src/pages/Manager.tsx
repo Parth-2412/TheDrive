@@ -254,21 +254,28 @@ const Manager: React.FC = () => {
   const handleAiModeChange = async (selectedFiles: IFile[], enable : boolean) => {
     if(selectedFiles[0] == null){
       if(enable){
-        await axiosInstance.put(`/api/files/root/enable_ai`)
+        // PURE DRIVE KO ENABLE KIYA HAI
+        // await axiosInstance.put(`/api/folders/root/enable_ai`)
+        // TODO handle the whole drive
       }
       else {
-        await axiosInstance.put(`/api/files/root/disable_ai`)
+        await axiosInstance.put(`/api/folders/root/disable_ai/`)
       }
-      // handle the whole drive
     }
     else if(!selectedFiles[0].isDirectory) {
       if(enable){
+        console.log("Notifying backend")
+        await axiosInstance.patch(`/api/files/toggle/`, {
+          file_ids : selectedFiles.map(f => f.id),
+          value: true,
+        })
+
+        console.log("Notified backend")
         for(const file of selectedFiles){
           const formData = new FormData();
           const data = {
             file_id : file.id,
           }
-  
           console.log("Decrypting file...")
           const file_data = await handleDecryption(file);
           console.log("File decrypted")
@@ -288,23 +295,37 @@ const Manager: React.FC = () => {
           )
           console.log("Processed file")
         }
+        
+      }
+      else {
+        
         console.log("Notifying backend")
-        await axiosInstance.patch(`/api/files/toggle`, {
-          file_ids : selectedFiles.map(f => f.id)
+        await axiosInstance.patch(`/api/files/toggle/`, {
+          file_ids : selectedFiles.map(f => f.id),
+          value: false,
         })
         console.log("Notified backend")
-      }
 
+      }
     }
     else {
-      //TODO: handle multiple folders
+      if(enable){
+        //TODO: handle multiple folders for enable
+
+      }
+      else {
+        await Promise.all(selectedFiles.map(folder => axiosInstance.patch(`/api/folders/${folder.id}/disable_ai/`, {
+          file_ids : selectedFiles.map(f => f.id),
+          value: false,
+        })))
+      }
     }
-    // const updatedFiles = files.map((file) =>
-    //   selectedFiles.map(f => f.id).includes(file.id)
-    //         ? { ...file, ai_enabled: !file.ai_enabled }
-    //         : file
-    //     );
-    //     setFiles(updatedFiles);
+    const updatedFiles = files.map((file) =>
+      selectedFiles.find(f => file.path.startsWith(f === null ? "/" : f.path))
+            ? { ...file, ai_enabled: enable }
+            : file
+        );
+    setFiles(updatedFiles);
   };
 
   const handleDecryption = async (file: IFile): Promise<ArrayBuffer> => {

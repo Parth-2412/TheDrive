@@ -17,8 +17,7 @@ class DocumentChunkSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = DocumentChunk
-        fields = ['id', 'chunk_content_encrypted', 'order_in_file', 'embedding_encrypted', 
-                  'ai_node', 'embedding_dimension', 'file', 'created_at']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at']
 
     def validate(self, data):

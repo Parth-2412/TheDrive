@@ -7,10 +7,10 @@ from .serializers import DocumentChunkSerializer
 from drf_spectacular.utils import extend_schema
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
-
+from django.core.exceptions import ValidationError
 
 class ActionSerializer(serializers.Serializer):
-    public_key = serializers.UUIDField(help_text="The user the AI node's searching for")
+    public_key = serializers.CharField(help_text="The user the AI node's searching for")
 
 class GetFilesChunksSerializer(ActionSerializer):
    files = serializers.ListField(
@@ -19,14 +19,17 @@ class GetFilesChunksSerializer(ActionSerializer):
        help_text="List of file UUIDs to get chunks for"
    )
 
+class CreateChunkSerializer(DocumentChunkSerializer):
+    class Meta(DocumentChunkSerializer.Meta):
+        fields = ['chunk_content_encrypted', 'order_in_file', 'embedding_encrypted', 'chunk_start', 'chunk_end']
 class StoreFilesChunksSerializer(ActionSerializer):
-   chunks = serializers.ListField(
-       child=DocumentChunkSerializer(),
-       allow_empty=False,
-       help_text="Chunks to store"
-   )
-   file_id = serializers.UUIDField(help_text="The file uuid to store chunks for")
-
+    chunks = serializers.ListField(
+        child=CreateChunkSerializer(),
+        allow_empty=False,
+        help_text="Chunks to store"
+    )
+    file_id = serializers.UUIDField(help_text="The file uuid to store chunks for")
+    
 class GetFolderChunksSerializer(ActionSerializer):
    folder_id = serializers.CharField(help_text="The folder uuid to get chunks for")
 
@@ -48,26 +51,30 @@ def store_chunks(request):
     """
     serializer = StoreFilesChunksSerializer(data=request.data)
     if serializer.is_valid():
-        user = get_user_for_ai_node(serializer.validated_data['public_key'], request.user)
-        file = get_object_or_404(File, id=serializer.validated_data['file_id'], user=user)
+        validated_data = serializer.validated_data
+        file_id = validated_data.pop('file_id', None)
+        user_public_key = validated_data.pop('public_key', None)
+        ai_node = AINode.objects.filter(public_key=request.user).first()
+        user = get_user_for_ai_node(user_public_key, ai_node)
+        file = get_object_or_404(File, id=file_id, user=user)
         if not file.ai_enabled:
             return Response(
                 {'error': 'AI processing is not enabled for this file'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        chunks_data = serializer.validated_data['chunks']  # Assuming 'chunks' field contains a list of chunks with embeddings
-        for chunk in chunks_data:
-            # Create and save the chunk with its embedding
-            DocumentChunk.objects.create(
-                file=file,
-                chunk_content_encrypted=chunk['chunk'],
-                embedding_encrypted=chunk['embedding'],
-                order_in_file=chunk['chunk_index'],
-                chunk_start=chunk['char_start'],
-                chunk_end=chunk['char_end'],
-            )
 
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        # Save all chunks, setting the file explicitly before saving
+        chunks_data = validated_data['chunks']
+        chunks = []
+        for chunk in chunks_data:
+            chunk['file'] = file  # Assign the file to each chunk explicitly
+            chunk['ai_node'] = ai_node
+            chunks.append(DocumentChunk(**chunk))
+
+        # Bulk create the chunks
+        DocumentChunk.objects.bulk_create(chunks)
+
+        return Response(DocumentChunkSerializer(chunks, many=True).data, status=status.HTTP_201_CREATED)
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -122,7 +129,7 @@ def get_chunks_folder(request):
     """
     serializer = StoreFilesChunksSerializer(data=request.data)
     if serializer.is_valid():
-        user = get_user_for_ai_node(serializer.validated_data['public_key'], request.user)
+        user = get_user_for_ai_node(serializer.validated_data['public_key'], AINode.objects.filter(public_key=request.user).first())
         folder_id = serializer.validated_data["folder_id"]
         # Determine if context_id refers to a file or folder
         chunk_data = None
@@ -151,7 +158,7 @@ def get_chunks_files(request):
     """
     serializer = GetFilesChunksSerializer(data=request.data)
     if serializer.is_valid():
-        user = get_user_for_ai_node(serializer.validated_data['public_key'], request.user)
+        user = get_user_for_ai_node(serializer.validated_data['public_key'], AINode.objects.filter(public_key=request.user).first())
         file_ids = serializer.validated_data['files']
         valid_file_ids = File.objects.filter(user=user, file_id__in=file_ids).values_list('file_id', flat=True)
         if len(valid_file_ids) < len(file_ids):

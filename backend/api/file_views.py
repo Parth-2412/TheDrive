@@ -614,32 +614,44 @@ def delete_file(request, file_id):
 @api_view(['PUT'])
 def disable_folder_ai(request, folder_id):
     """Disable AI on all the files in the folder sub tree"""
-    folder_record = get_object_or_404(Folder, id=folder_id, user=request.user)
+    if folder_id != "root":
+        get_object_or_404(Folder, id=folder_id, user=request.user)
+    else:
+        folder_id = None
 
     try:
         # Recursive query to get all files in the folder and its subfolders
-        query = """
-        WITH RECURSIVE file_hierarchy AS (
-            -- Base case: Select files directly in the given folder
-            SELECT f.id
-            FROM files f
-            WHERE f.folder_id = %s
+        user_id = request.user.id
 
-            UNION ALL
+        if folder_id is None:
+            query = """
+                UPDATE files
+                SET ai_enabled = false
+                WHERE user_id = %s;
+            """
+        else:
+            query = """
+                WITH RECURSIVE file_hierarchy AS (
+                    -- Base case: Select files directly in the given folder
+                    SELECT f.id
+                    FROM files f
+                    WHERE f.folder_id = %s AND f.user_id = %s
 
-            -- Recursive case: Select files in subfolders
-            SELECT f.id
-            FROM files f
-            JOIN file_hierarchy fh ON fh.id = f.folder_id
-        )
-        UPDATE files
-        SET ai_enabled = false
-        WHERE id IN (SELECT id FROM file_hierarchy);
-        """
-        
+                    UNION ALL
+
+                    -- Recursive case: Select files in subfolders
+                    SELECT f.id
+                    FROM files f
+                    JOIN file_hierarchy fh ON fh.id = f.folder_id
+                    WHERE f.user_id = %s
+                )
+                UPDATE files
+                SET ai_enabled = false
+                WHERE id IN (SELECT id FROM file_hierarchy) AND user_id = %s;
+            """
+
         with connection.cursor() as cursor:
-            cursor.execute(query, [folder_id])
-
+            cursor.execute(query, [folder_id, user_id] if folder_id is not None else [user_id])
         return Response(status=status.HTTP_204_NO_CONTENT)
     
     except Exception as e:
@@ -658,32 +670,44 @@ def disable_folder_ai(request, folder_id):
 @api_view(['PUT'])
 def enable_folder_ai(request, folder_id):
     """Enable AI on all the files in the folder sub tree"""
-    folder_record = get_object_or_404(Folder, id=folder_id, user=request.user)
+    if folder_id != "root":
+        get_object_or_404(Folder, id=folder_id, user=request.user)
+    else:
+        folder_id = None
 
     try:
         # Recursive query to get all files in the folder and its subfolders
-        query = """
-        WITH RECURSIVE file_hierarchy AS (
-            -- Base case: Select files directly in the given folder
-            SELECT f.id
-            FROM files f
-            WHERE f.folder_id = %s
+        user_id = request.user.id
 
-            UNION ALL
+        if folder_id is None:
+            query = """
+                UPDATE files
+                SET ai_enabled = false
+                WHERE user_id = %s;
+            """
+        else:
+            query = """
+                WITH RECURSIVE file_hierarchy AS (
+                    -- Base case: Select files directly in the given folder
+                    SELECT f.id
+                    FROM files f
+                    WHERE f.folder_id = %s AND f.user_id = %s
 
-            -- Recursive case: Select files in subfolders
-            SELECT f.id
-            FROM files f
-            JOIN file_hierarchy fh ON fh.id = f.folder_id
-        )
-        UPDATE files
-        SET ai_enabled = true
-        WHERE id IN (SELECT id FROM file_hierarchy);
-        """
+                    UNION ALL
+
+                    -- Recursive case: Select files in subfolders
+                    SELECT f.id
+                    FROM files f
+                    JOIN file_hierarchy fh ON fh.id = f.folder_id
+                    WHERE f.user_id = %s
+                )
+                UPDATE files
+                SET ai_enabled = false
+                WHERE id IN (SELECT id FROM file_hierarchy) AND user_id = %s;
+            """
 
         with connection.cursor() as cursor:
-            cursor.execute(query, [folder_id])
-
+            cursor.execute(query, [folder_id, user_id] if folder_id is not None else [user_id])
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     except Exception as e:
@@ -697,6 +721,7 @@ class ToggleFilesAISerializer(serializers.Serializer):
         child=serializers.UUIDField(),  # Ensure that file_ids are integers
         required=True
     )
+    value = serializers.BooleanField(required=True)
 
 @extend_schema(
     operation_id='toggle_files_ai',
@@ -715,7 +740,7 @@ def toggle_files_ai(request):
 
     if serializer.is_valid():
         file_ids = serializer.validated_data['file_ids']
-
+        value = serializer.validated_data['value']
         try:
             # Use a single query to toggle the ai_enabled field for the files that belong to the current user
             files_to_update = File.objects.filter(id__in=file_ids, user=request.user)
@@ -728,7 +753,7 @@ def toggle_files_ai(request):
 
             # Perform the update with one SQL query
             updated_count = files_to_update.update(
-                ai_enabled=~File.objects.filter(id__in=file_ids, user=request.user).values_list('ai_enabled', flat=True).first()
+                ai_enabled=value
             )
 
             if updated_count > 0:
