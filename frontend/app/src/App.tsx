@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { IonApp, IonPage, IonRouterOutlet, IonSpinner, IonButton, IonRouterLink, setupIonicReact } from '@ionic/react';
+import { IonApp, IonPage, IonRouterOutlet, IonSpinner, IonButton, IonRouterLink, setupIonicReact, IonContent } from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
 import { Route, Redirect } from 'react-router-dom'; // Using React Router v5
 import { useRecoilState } from 'recoil';
@@ -13,12 +13,12 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import axiosInstance from './services/api.service';
 import './global.css'
+import ChatApp from './components/Chat';
 
 setupIonicReact();
 
 const App: React.FC = () => {
   const [user, setUser] = useRecoilState(userState);
-
   // Effect to check user credentials on app load
   useEffect(() => {
     const checkUserCredentials = async () => {
@@ -132,8 +132,8 @@ const App: React.FC = () => {
               </>
             ) : (
               <>
-                <Route path="/">
-                  <Manager />
+                <Route exact path="/">
+                  <ChatApp />
                 </Route>
                 <Route render={() => <Redirect to='/' />} />
               </>

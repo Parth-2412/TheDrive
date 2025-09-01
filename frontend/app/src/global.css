@@ -6,10 +6,18 @@
   align-items: center;
   justify-content: center;
   align-items: center;
-  background-color: rgb(244, 244, 244);
-
 }
 
 * {
   font-family: Roboto;
+  --chat-height : 42vh;
+}
+.file-explorer .grid {
+  /* overflow-y: scroll !important; */
+  height: calc(100% - 90px) !important;
+}
+
+body {
+  background-color: rgb(244, 244, 244);
+
 }
