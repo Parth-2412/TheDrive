@@ -8,7 +8,10 @@ class AINodeRequiredMiddleware(MiddlewareMixin):
        self.get_response = get_response
        # Define paths that require AI node
        self.protected_paths = [
-           
+           'api:store_chunks',
+           'api:get_chunks_folder',
+           'api:get_chunks_files',
+           'api:is_user',
        ]
        super().__init__(get_response)
    

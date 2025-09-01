@@ -1,23 +1,25 @@
 # rag_pipeline.py
 """
-Retrieval-Augmented Generation (RAG) pipeline for NeonDB integration.
-Works with PostgreSQL database and enhanced cross-referencing metadata.
+Retrieval-Augmented Generation (RAG) pipeline with ChromaDB integration.
+Works with local ChromaDB instances for fast vector similarity search.
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import numpy as np
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
 from langchain_huggingface import HuggingFaceEmbeddings
+import chromadb
+import logging
+
+logger = logging.getLogger(__name__)
 
 class RAGPipeline:
     def __init__(self, embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2", 
                  gemini_model: str = "models/gemini-2.5-flash-lite"):
         """
-        Initialize RAG pipeline for NeonDB integration with cross-referencing support.
+        Initialize RAG pipeline with ChromaDB integration.
         """
         self.embedding_model = HuggingFaceEmbeddings(model_name=embedding_model_name)
         
@@ -35,57 +37,70 @@ class RAGPipeline:
         b = np.array(b)
         return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-    async def retrieve_context_from_db(self, db_session: AsyncSession, query: str, 
-                                     scope: str, k: int = 5) -> List[Dict[str, Any]]:
+    async def retrieve_context_from_chromadb(self, vector_db_path: str, query: str, k: int = 5) -> List[Dict[str, Any]]:
         """
-        Retrieve top-k relevant chunks from NeonDB based on semantic similarity.
-        Enhanced to work with cross-referencing metadata.
+        Retrieve top-k relevant chunks from ChromaDB based on semantic similarity.
         """
-        # Generate query embedding
-        query_embedding = self.embedding_model.embed_query(query)
-        
-        # Fetch all chunks for the scope with enhanced metadata access
-        result = await db_session.execute(
-            text("SELECT chunk, embedding, meta FROM ai_chunks WHERE LOWER(meta->>'scope') = LOWER(:scope)"),
-            {"scope": scope}
-        )
-        rows = result.mappings().all()
-        
-        if not rows:
-            return []
-        
-        # Calculate similarities and rank
-        chunks_with_similarity = []
-        for row in rows:
-            chunk_embedding = row["embedding"]
-            similarity = self.cosine_similarity(query_embedding, chunk_embedding)
+        try:
+            # Generate query embedding
+            query_embedding = self.embedding_model.embed_query(query)
             
-            # Extract enhanced metadata for cross-referencing
-            meta = row["meta"]
-            chunks_with_similarity.append({
-                "content": row["chunk"],
-                "metadata": meta,
-                "similarity": similarity
-            })
-        
-        # Sort by similarity and return top-k
-        chunks_with_similarity.sort(key=lambda x: x["similarity"], reverse=True)
-        return chunks_with_similarity[:k]
+            # Connect to ChromaDB
+            client = chromadb.PersistentClient(path=vector_db_path)
+            collection = client.get_collection("documents")
+            
+            # Query ChromaDB for similar chunks
+            results = collection.query(
+                query_embeddings=[query_embedding],
+                n_results=k,
+                include=["documents", "metadatas", "distances"]
+            )
+            
+            if not results["documents"][0]:
+                return []
+            
+            # Format results for consistency
+            chunks_with_similarity = []
+            for i, (doc, metadata, distance) in enumerate(zip(
+                results["documents"][0], 
+                results["metadatas"][0], 
+                results["distances"][0]
+            )):
+                # Convert distance to similarity (ChromaDB returns L2 distance)
+                similarity = 1 / (1 + distance)  # Simple conversion
+                
+                chunks_with_similarity.append({
+                    "content": doc,
+                    "metadata": metadata,
+                    "similarity": similarity
+                })
+            
+            return chunks_with_similarity
+            
+        except Exception as e:
+            logger.error(f"Error retrieving context from ChromaDB: {e}")
+            return []
 
     def generate_answer(self, query: str, context_chunks: List[Dict[str, Any]], 
-                       memory: List[Dict] = None) -> Dict[str, Any]:
+                       memory: Optional[List[Dict]] = None) -> Dict[str, Any]:
         """
-        Generate answer with enhanced source attribution for cross-referencing.
+        Generate answer with enhanced source attribution.
         """
+        if not context_chunks:
+            return {
+                "answer": "I couldn't find any relevant information to answer your question.",
+                "citations": [],
+                "context_chunks_used": 0
+            }
+        
         # Build context with numbered sources for precise attribution
         context_parts = []
         for i, chunk in enumerate(context_chunks):
             meta = chunk['metadata']
-            file_name = meta.get('file', 'Unknown')
-            page_num = meta.get('page_number', 1)
+            file_name = meta.get('file_name', 'Unknown')
             chunk_idx = meta.get('chunk_index', i)
             
-            source_label = f"[Source {i+1}: {file_name} - Page {page_num}, Chunk {chunk_idx}]"
+            source_label = f"[Source {i+1}: {file_name}, Chunk {chunk_idx}]"
             context_parts.append(f"{source_label}\n{chunk['content']}\n")
         
         context_text = "\n".join(context_parts)
@@ -119,26 +134,27 @@ Instructions:
 
 Answer:"""
 
-        # Generate response
-        response = self.gemini.generate_content(prompt)
-        answer = response.text.strip() if hasattr(response, 'text') else str(response)
+        try:
+            # Generate response
+            response = self.gemini.generate_content(prompt)
+            answer = response.text.strip() if hasattr(response, 'text') else str(response)
+        except Exception as e:
+            logger.error(f"Error generating answer with Gemini: {e}")
+            answer = "I apologize, but I encountered an error while generating the response. Please try again."
         
-        # Prepare enhanced citations for cross-referencing
+        # Prepare enhanced citations
         citations = []
         for i, chunk in enumerate(context_chunks):
             meta = chunk['metadata']
             citations.append({
                 "source_id": i + 1,
-                "file": meta.get('file', 'Unknown'),
-                "file_path": meta.get('file_path', ''),
-                "page_number": meta.get('page_number', 1),
-                "chunk_id": meta.get('chunk_id', ''),
+                "file_name": meta.get('file_name', 'Unknown'),
+                "file_id": meta.get('file_id', 'Unknown'),
                 "chunk_index": meta.get('chunk_index', i),
                 "char_start": meta.get('char_start', 0),
                 "char_end": meta.get('char_end', 0),
-                "scope": meta.get('scope', ''),
-                "user_id": meta.get('user_id', ''),
-                "similarity": round(chunk.get("similarity", 0), 3)
+                "similarity": round(chunk.get("similarity", 0), 3),
+                "chunk_content": chunk['content']
             })
         
         return {
@@ -147,47 +163,63 @@ Answer:"""
             "context_chunks_used": len(context_chunks)
         }
 
-    async def run_with_db(self, db_session: AsyncSession, query: str, scope: str, 
-                         memory: List[Dict] = None, k: int = 5) -> Dict[str, Any]:
+    async def run_with_chromadb(self, vector_db_path: str, query: str, 
+                               memory: Optional[List[Dict]] = None, k: int = 5) -> Dict[str, Any]:
         """
-        Full RAG pipeline using NeonDB with cross-referencing support:
-        1. Retrieve relevant chunks from database
-        2. Generate answer with enhanced context and memory
-        3. Return response with detailed citations for cross-referencing
+        Full RAG pipeline using ChromaDB:
+        1. Retrieve relevant chunks from ChromaDB
+        2. Generate answer with context and memory
+        3. Return response with detailed citations
         """
-        # Retrieve context from database
-        context_chunks = await self.retrieve_context_from_db(db_session, query, scope, k)
-        
-        if not context_chunks:
+        # Check if vector database exists
+        if not os.path.exists(vector_db_path):
             return {
-                "answer": f"I couldn't find any relevant information for scope '{scope}'. Please check if documents are available for this scope.",
+                "answer": "The chat session vector database could not be found. Please start a new session.",
                 "citations": [],
                 "context_chunks_used": 0
             }
         
-        # Generate answer with enhanced citations
+        # Retrieve context from ChromaDB
+        context_chunks = await self.retrieve_context_from_chromadb(vector_db_path, query, k)
+        
+        if not context_chunks:
+            return {
+                "answer": "I couldn't find any relevant information in the loaded documents to answer your question.",
+                "citations": [],
+                "context_chunks_used": 0
+            }
+        
+        # Generate answer with citations
         return self.generate_answer(query, context_chunks, memory)
 
-    async def get_chunk_by_id(self, db_session: AsyncSession, chunk_id: str) -> Dict[str, Any]:
+    async def get_all_chunks_info(self, vector_db_path: str) -> List[Dict[str, Any]]:
         """
-        Retrieve specific chunk by chunk_id for highlighting functionality.
+        Get information about all chunks in the ChromaDB collection.
+        Useful for debugging and session management.
         """
-        result = await db_session.execute(
-            text("SELECT chunk, meta FROM ai_chunks WHERE meta->>'chunk_id' = :chunk_id"),
-            {"chunk_id": chunk_id}
-        )
-        row = result.mappings().first()
-        
-        if not row:
-            return None
-        
-        meta = row["meta"]
-        return {
-            "content": row["chunk"],
-            "file": meta.get('file', 'Unknown'),
-            "file_path": meta.get('file_path', ''),
-            "page_number": meta.get('page_number', 1),
-            "char_start": meta.get('char_start', 0),
-            "char_end": meta.get('char_end', 0),
-            "chunk_index": meta.get('chunk_index', 0)
-        }
+        try:
+            client = chromadb.PersistentClient(path=vector_db_path)
+            collection = client.get_collection("documents")
+            
+            # Get all documents
+            results = collection.get(
+                include=["documents", "metadatas"]
+            )
+            
+            chunks_info = []
+            for i, (doc, metadata) in enumerate(zip(results["documents"], results["metadatas"])):
+                chunks_info.append({
+                    "chunk_index": i,
+                    "file_name": metadata.get('file_name', 'Unknown'),
+                    "file_id": metadata.get('file_id', 'Unknown'),
+                    "char_start": metadata.get('char_start', 0),
+                    "char_end": metadata.get('char_end', 0),
+                    "content_preview": doc[:100] + "..." if len(doc) > 100 else doc,
+                    "content_length": len(doc)
+                })
+            
+            return chunks_info
+            
+        except Exception as e:
+            logger.error(f"Error getting chunks info: {e}")
+            return []

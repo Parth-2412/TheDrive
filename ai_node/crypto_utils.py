@@ -7,7 +7,10 @@ import hashlib
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
-
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+import os
+import base64
 
 def create_mnemonic():
     mnemo = Mnemonic("english")
@@ -49,3 +52,50 @@ def get_file_sha256_hash(file_path: str) -> str:
         for chunk in iter(lambda: f.read(4096), b""):
             sha256.update(chunk)
     return sha256.hexdigest()
+
+
+def encrypt_input_bytes(input_bytes: bytes, master_aes_key: bytes) -> str:
+    # Generate a random 12-byte IV (Initialization Vector)
+    iv = os.urandom(12)
+
+
+    # Create the cipher and encrypt the input using AES-GCM
+    cipher = Cipher(algorithms.AES(master_aes_key), modes.GCM(iv), backend=default_backend())
+    encryptor = cipher.encryptor()
+    encrypted_input = encryptor.update(input_bytes) + encryptor.finalize()
+
+    # Combine the IV and the encrypted input
+    combined = iv + encrypted_input
+
+    # Return the base64-encoded result
+    return base64.b64encode(combined).decode('utf-8')
+
+
+def encrypt_input(input: str, master_aes_key: bytes) -> str:
+    # Encode the input to bytes
+    input_bytes = input.encode('utf-8')
+
+    return encrypt_input_bytes(input_bytes, master_aes_key)
+
+
+def decrypt_input_bytes(encrypted_input_base64: str, master_aes_key: bytes) -> bytes:
+    # Base64 decode the encrypted input
+    combined = base64.b64decode(encrypted_input_base64)
+    
+    # Extract the IV (first 12 bytes) and the encrypted input
+    iv = combined[:12]
+    encrypted_input = combined[12:]
+
+    # Create the cipher and decrypt the input using AES-GCM
+    cipher = Cipher(algorithms.AES(master_aes_key), modes.GCM(iv), backend=default_backend())
+    decryptor = cipher.decryptor()
+    decrypted_input = decryptor.update(encrypted_input) + decryptor.finalize()
+
+    return decrypted_input
+
+def decrypt_input(encrypted_input_base64: str, master_aes_key: bytes) -> str:
+    # Decrypt the input bytes
+    decrypted_input_bytes = decrypt_input_bytes(encrypted_input_base64, master_aes_key)
+
+    # Convert decrypted bytes back to a string
+    return decrypted_input_bytes.decode('utf-8')

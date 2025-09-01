@@ -15,29 +15,150 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 import tempfile
 from contextlib import asynccontextmanager
-
+from typing import TypedDict, List
 # Import your existing components
 from file_processor import FileProcessor
 from langchain_huggingface import HuggingFaceEmbeddings
-from db import SessionLocal
-from models import get_chat_memory, update_chat_memory, ChatMemory
+from db import SessionLocal, engine, Base
+from models import ChatMessageDB, ChatSessionDB
 from rag_pipeline import RAGPipeline
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from utils import utc_now
 import json
+from crypto_utils import encrypt_input_bytes, decrypt_input_bytes, encrypt_input, decrypt_input
+import numpy as np
+import chromadb
+from chromadb.config import Settings
+import uuid
+import shutil
+import datetime
+import base64
+from collections import defaultdict
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class SessionChatRequest(BaseModel):
-    user_id: str
+class FileType(TypedDict):
+    id: str
+    name: str
+
+class StartChatRequest(BaseModel):
+    files: List[FileType]
+class IngestRequest(BaseModel):
+    file_id : str
+
+
+
+
+class CloseSessionRequest(BaseModel):
+    session_id: str
+
+class ChatMessage(BaseModel):
     session_id: str
     query: str
 
-class IngestRequest(BaseModel):
-    file_id : str
+
+
+
+class FileIngestResponse(BaseModel):
+    file: str = Field(..., description="Uploaded filename (with extension)")
+    num_chunks: int = Field(..., ge=0, description="Number of chunks created from the file")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [{"file": "notes.pdf", "num_chunks": 37}]
+        }
+    }
+
+
+class SessionLoadResponse(BaseModel):
+    session_id: str = Field(..., description="Session identifier")
+    chunks_loaded: int = Field(..., ge=0, description="Number of chunks loaded into the session")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [{"session_id": "sess_123", "chunks_loaded": 120}]
+        }
+    }
+
+
+class SessionIdResponse(BaseModel):
+    session_id: str = Field(..., description="Session identifier")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [{"session_id": "sess_123"}]
+        }
+    }
+
+
+class Citation(BaseModel):
+    source_id: int = Field(..., ge=0, description="1-based (or 0-based) index for the source")
+    file_name: str = Field(..., description="Original file name")
+    file_id: str = Field(..., description="Internal file ID")
+    chunk_index: int = Field(..., ge=0, description="Index of the chunk within the file")
+    char_start: int = Field(..., ge=0, description="Character start offset of the cited span")
+    char_end: int = Field(..., ge=0, description="Character end offset of the cited span")
+    similarity: float = Field(..., ge=0.0, description="Similarity score (e.g., cosine)")
+    chunk_content: str = Field(..., description="Raw text content of the cited chunk")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "source_id": 1,
+                    "file_name": "notes.pdf",
+                    "file_id": "file_abc",
+                    "chunk_index": 12,
+                    "char_start": 0,
+                    "char_end": 180,
+                    "similarity": 0.873,
+                    "chunk_content": "The quick brown fox jumps over the lazy dog ..."
+                }
+            ]
+        }
+    }
+
+
+class QueryAnswerResponse(BaseModel):
+    session_id: str = Field(..., description="Session identifier")
+    query: str = Field(..., description="Original user query")
+    answer: str = Field(..., description="RAG answer text")
+    citations: List[Citation] = Field(
+        default_factory=list,
+        description="List of citations that support the answer"
+    )
+    context_chunks_used: int = Field(..., ge=0, description="Number of chunks used to produce the answer")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "session_id": "sess_123",
+                    "query": "What are the key takeaways?",
+                    "answer": "The report highlights three key takeaways: ...",
+                    "citations": [
+                        {
+                            "source_id": 1,
+                            "file_name": "notes.pdf",
+                            "file_id": "file_abc",
+                            "chunk_index": 12,
+                            "char_start": 0,
+                            "char_end": 180,
+                            "similarity": 0.873,
+                            "chunk_content": "The quick brown fox jumps over the lazy dog ..."
+                        }
+                    ],
+                    "context_chunks_used": 4
+                }
+            ]
+        }
+    }
+
+
 @dataclass
 class AINodeCredentials:
     """Stores AI node authentication credentials"""
@@ -49,7 +170,7 @@ class AINodeCredentials:
     token_expires_at: Optional[float] = None
 
 
-class AINodeAuthenticator:
+class ServerService:
     """Handles authentication for AI nodes with automatic token refresh"""
     
     def __init__(self, 
@@ -228,13 +349,6 @@ class AINodeAuthenticator:
         await self.client.aclose()
 
 
-class AINodeService:
-    """Service class for AI node operations"""
-    
-    def __init__(self, authenticator: AINodeAuthenticator):
-        self.auth = authenticator
-
-
 T = TypeVar('T', bound=BaseModel)
 
 class SignedRequest(BaseModel, Generic[T]):
@@ -244,8 +358,8 @@ class SignedRequest(BaseModel, Generic[T]):
     - signature: hex encoded signature  
     - data: the actual pydantic schema being signed
     """
-    public_key: str = Field(..., regex=r'^[0-9a-fA-F]{64}$', description="64-character hex public key")
-    signature: str = Field(..., regex=r'^[0-9a-fA-F]+$', description="Hex-encoded signature")
+    public_key: str = Field(..., pattern=r'^[0-9a-fA-F]{64}$', description="64-character hex public key")
+    signature: str = Field(..., pattern=r'^[0-9a-fA-F]+$', description="Hex-encoded signature")
     data: T = Field(..., description="The signed data payload")
 
     @field_validator('public_key')
@@ -293,7 +407,7 @@ async def verify_user_signature(signed_request: SignedRequest[T]) -> T:
         
         # Create the message that was signed (JSON string of data, sorted for consistency)
         message_to_verify = json.dumps(
-            data.dict(), 
+            data, 
             sort_keys=True, 
             separators=(',', ':')
         )
@@ -326,11 +440,10 @@ async def verify_user_signature(signed_request: SignedRequest[T]) -> T:
         raise HTTPException(status_code=500, detail="Internal server error during verification")
     
 # Global instances
-auth_client: Optional[AINodeAuthenticator] = None
-ai_service: Optional[AINodeService] = None
+service: Optional[ServerService] = None
 
 
-def initialize_ai_node_auth() -> AINodeAuthenticator:
+def initialize_ai_node_auth() -> ServerService:
     """Initialize the AI node with its credentials from environment"""
     public_key_hex = os.getenv('PUBLIC_KEY')
     private_key_hex = os.getenv('PRIVATE_KEY')
@@ -347,7 +460,7 @@ def initialize_ai_node_auth() -> AINodeAuthenticator:
     
     username = public_key_hex
     
-    return AINodeAuthenticator(
+    return ServerService(
         server_base_url=server_url,
         public_key=public_key,
         private_key=private_key,
@@ -360,14 +473,14 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     # Startup logic
     print("Application startup: Initializing resources...")
-    global auth_client, ai_service
+    global service
     
     try:
-        auth_client = initialize_ai_node_auth()
-        ai_service = AINodeService(auth_client)
-        
+        service = initialize_ai_node_auth()
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
         # Attempt initial login
-        success = await auth_client.login()
+        success = await service.login()
         if success:
             logger.info("AI Node authenticated successfully on startup")
         else:
@@ -380,9 +493,9 @@ async def lifespan(app: FastAPI):
     
     # Shutdown logic
     print("Application shutdown: Cleaning up resources...")
-    if auth_client:
+    if service:
         try:
-            await auth_client.close()
+            await service.close()
         except Exception as e:
             logger.error(f"Error closing auth client: {e}")
 
@@ -406,25 +519,22 @@ app.add_middleware(
 
 # Pydantic models
 class ChatRequest(BaseModel):
-    query: str
-    k: Optional[int] = 3
-    drive: Optional[str] = None
     folder: Optional[str] = None
-    file: Optional[str] = None
+    files: Optional[str] = None
 
 
 # Dependency to ensure authentication
 async def ensure_authenticated():
     """Dependency to ensure AI node is authenticated"""
-    global auth_client
+    global service
     
-    if not auth_client:
+    if not service:
         raise HTTPException(status_code=503, detail="AI node not initialized")
     
-    if not await auth_client.ensure_valid_token():
+    if not await service.ensure_valid_token():
         raise HTTPException(status_code=503, detail="AI node authentication failed")
     
-    return auth_client
+    return service
 
 
 @app.get("/health")
@@ -434,11 +544,14 @@ async def health_check():
 
 
 # --- Ingestion Endpoint ---
-@app.post("/ingest")
+@app.post(
+    "/ingest",
+    response_model=FileIngestResponse
+)
 async def ingest(
     signed_request: SignedRequest[IngestRequest],
     file: UploadFile = File(...),
-    auth: AINodeAuthenticator = Depends(ensure_authenticated),
+    auth: ServerService = Depends(ensure_authenticated),
 ):
     """
     Ingest and AI-enable a file: chunk, embed, encrypt, and return encrypted data for storage.
@@ -484,16 +597,16 @@ async def ingest(
             clean_chunk = doc.page_content.replace('\x00', '')
             
             chunk_obj = {
-                "chunk": clean_chunk, 
-                "embedding": emb, 
-                "file_id": file_id
+                "chunk": encrypt_input(clean_chunk), 
+                "embedding": encrypt_input_bytes(np.array(emb, dtype=np.float32)), 
             }
             chunk_obj.update(doc.metadata)
             chunks.append(chunk_obj)
 
-        # TODO: encrypt and send to server to store.
-        payload = chunks      
+        # TODO: encrypt.
 
+        payload = {"chunks": chunks, "file_id" : file_id}
+        await service.post('/api/chunks/store', json=payload )
         return {
             "file": filename,
             "num_chunks": len(chunks),
@@ -507,67 +620,193 @@ async def ingest(
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
-# --- Session-based Chat Endpoint ---
-@app.post("/chat/session")
-async def chat_session(
-    signed_request: SignedRequest[SessionChatRequest],
-    auth: AINodeAuthenticator = Depends(ensure_authenticated)
+@app.post("/chat/start",response_model=SessionLoadResponse)
+async def chat_start(
+    signed_request: SignedRequest[StartChatRequest],
+    auth: ServerService = Depends(ensure_authenticated)
 ):
-    """Enhanced chat endpoint with semantic search and memory"""
+    """Start a new chat session with folder/file data"""
     request = await verify_user_signature(signed_request)
     db_session = None
+    id_to_name = defaultdict(str)
+    for file in request.files:
+        id_to_name[file["id"]] = file["name"]
     try:
         db_session = SessionLocal()
         
-        # Fetch chat memory
-        chat_mem = await get_chat_memory(db_session, request.user_id, request.session_id)
-        memory = chat_mem.memory if chat_mem else []
+        # Generate unique session ID
+        session_id = str(uuid.uuid4())
+        
+        # Create vector database directory
+        vector_db_dir = f"./vector_dbs"
+        os.makedirs(vector_db_dir, exist_ok=True)
+        vector_db_path = os.path.join(vector_db_dir, f"{session_id}.db")
+        
+        # Initialize ChromaDB
+        client = chromadb.PersistentClient(path=vector_db_path)
+        collection = client.get_or_create_collection("documents")
+        
+        # Fetch chunks from server endpoints
+        all_chunks = []
+        
+        
+        # Get file chunks
+        if request.files:
+            files_response = await service.post('/api/chunks/files/', 
+                                              json={"files": [file.id for file in request.files]})
+            if files_response.status_code == 200:
+                files_data = files_response.json()
+                all_chunks.extend([ {**chunk, "file_name" : id_to_name[chunk["file"]] } for chunk in files_data.get("chunks", [])])
+        
+        if not all_chunks:
+            raise HTTPException(status_code=404, detail="No chunks found for specified folders/files")
+        
+        # Decrypt and store chunks in ChromaDB
+        documents = []
+        metadatas = []
+        ids = []
+        embeddings = []
+        
+        for i, chunk_data in enumerate(all_chunks):
+            # Decrypt chunk content and embedding
+            decrypted_content = decrypt_input(chunk_data["chunk"])
+            decrypted_embedding = decrypt_input_bytes(chunk_data["embedding"])
+            
+            # Prepare for ChromaDB
+            chunk_id = chunk_data.get('id', f"chunk_{i}")
+            documents.append(decrypted_content)
+            metadatas.append({
+                "file_name": chunk_data.get('file_name', 'Unknown'),
+                "file_id": chunk_data.get('file', 'Unknown'),
+                "chunk_index": chunk_data.get("order_in_file", i),
+                "char_start": chunk_data.get("chunk_start", 0),
+                "char_end": chunk_data.get("chunk_end", 0)
+            })
+            ids.append(chunk_id)
+            embeddings.append(np.frombuffer(base64.b64decode(decrypted_embedding), dtype=np.float32))
+        
+        # Add to ChromaDB collection
+        collection.add(
+            documents=documents,
+            metadatas=metadatas,
+            ids=ids,
+            embeddings=embeddings
+        )
+        
+        # Save session to database
+        chat_session = ChatSessionDB(
+            session_id=session_id,
+            public_key=signed_request.public_key,
+            vector_db_path=vector_db_path,
+            created_at=utc_now(),
+            updated_at=utc_now()
+        )
+        
+        db_session.add(chat_session)
+        await db_session.commit()
+        
+        return {
+            "session_id": session_id,
+            "chunks_loaded": len(all_chunks),
+        }
+        
+    except Exception as e:
+        logger.error(f"Chat start failed: {e}")
+        if db_session:
+            await db_session.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to start chat session: {str(e)}")
+    finally:
+        if db_session:
+            await db_session.close()
+
+# Add these models
+
+
+# Modify the chat endpoint
+@app.post("/chat", response_model=QueryAnswerResponse)
+async def chat(
+    signed_request: SignedRequest[ChatMessage],
+    auth: ServerService = Depends(ensure_authenticated)
+):
+    """Chat with the loaded session data"""
+    request = await verify_user_signature(signed_request)
+    db_session = None
+    
+    try:
+        db_session = SessionLocal()
+        
+        # Get session from database
+        session_result = await db_session.execute(
+            text("SELECT * FROM chat_sessions WHERE session_id = :session_id AND public_key = :public_key"),
+            {"session_id": request.session_id, "public_key": signed_request.public_key}
+        )
+        session_row = session_result.mappings().first()
+        
+        if not session_row:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+        
+        # Get chat history for this session
+        messages_result = await db_session.execute(
+            text("SELECT role, content FROM chat_messages WHERE session_id = :session_id ORDER BY created_at"),
+            {"session_id": request.session_id}
+        )
+        messages = messages_result.mappings().all()
+        memory = [{"role": msg["role"], "content": msg["content"]} for msg in messages]
+        
+        # Store user message
+        user_message_id = str(uuid.uuid4())
+        user_message = ChatMessageDB(
+            id=user_message_id,
+            session_id=request.session_id,
+            public_key=signed_request.public_key,
+            role="user",
+            content=request.query,
+            created_at=utc_now()
+        )
+        db_session.add(user_message)
         
         # Initialize RAG pipeline
         rag = RAGPipeline(
             embedding_model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
         
-        # Run RAG with database integration
-        rag_result = await rag.run_with_db(
-            db_session=db_session,
+        # Run RAG with ChromaDB
+        rag_result = await rag.run_with_chromadb(
+            vector_db_path=session_row["vector_db_path"],
             query=request.query,
             memory=memory,
             k=5
         )
         
-        # Update conversation memory
-        user_msg = {"role": "user", "content": request.query}
-        ai_msg = {"role": "ai", "content": rag_result.get("answer", "")}
-        updated_memory = memory + [user_msg, ai_msg]
+        # Store assistant response
+        assistant_message_id = str(uuid.uuid4())
+        assistant_message = ChatMessageDB(
+            id=assistant_message_id,
+            session_id=request.session_id,
+            public_key=signed_request.public_key,
+            role="assistant",
+            content=rag_result["answer"],
+            created_at=utc_now()
+        )
+        db_session.add(assistant_message)
         
-        # Save memory
-        if chat_mem:
-            chat_mem.memory = updated_memory
-            chat_mem.updated_at = utc_now()
-        else:
-            chat_mem = ChatMemory(
-                user_id=request.user_id,
-                session_id=request.session_id,
-                memory=updated_memory,
-                updated_at=utc_now()
-            )
-            db_session.add(chat_mem)
-        
+        # Update session timestamp
+        await db_session.execute(
+            text("UPDATE chat_sessions SET updated_at = :updated_at WHERE session_id = :session_id"),
+            {"updated_at": utc_now(), "session_id": request.session_id}
+        )
         await db_session.commit()
         
         return {
-            "user_id": request.user_id,
             "session_id": request.session_id,
             "query": request.query,
             "answer": rag_result["answer"],
             "citations": rag_result["citations"],
-            "context_chunks_used": rag_result["context_chunks_used"],
-            "memory_length": len(updated_memory)
+            "context_chunks_used": rag_result["context_chunks_used"]
         }
         
     except Exception as e:
-        logger.error(f"Chat session failed: {e}")
+        logger.error(f"Chat failed: {e}")
         if db_session:
             await db_session.rollback()
         raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
@@ -575,17 +814,74 @@ async def chat_session(
         if db_session:
             await db_session.close()
 
+# Also update close_session to clean up messages
+@app.post("/chat/close", response_model=SessionIdResponse)
+async def close_session(
+    signed_request: SignedRequest[CloseSessionRequest],
+    auth: ServerService = Depends(ensure_authenticated)
+):
+    """Close a chat session and cleanup resources"""
+    request = await verify_user_signature(signed_request)
+    db_session = None
+    
+    try:
+        db_session = SessionLocal()
+        
+        # Get session from database
+        session_result = await db_session.execute(
+            text("SELECT * FROM chat_sessions WHERE session_id = :session_id AND public_key = :public_key"),
+            {"session_id": request.session_id, "public_key": signed_request.public_key}
+        )
+        session_row = session_result.mappings().first()
+        
+        if not session_row:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+        
+        # Delete chat messages
+        await db_session.execute(
+            text("DELETE FROM chat_messages WHERE session_id = :session_id"),
+            {"session_id": request.session_id}
+        )
+        
+        # Delete vector database directory
+        vector_db_path = session_row["vector_db_path"]
+        if os.path.exists(vector_db_path):
+            shutil.rmtree(vector_db_path, ignore_errors=True)
+        
+        # Delete session from database
+        await db_session.execute(
+            text("DELETE FROM chat_sessions WHERE session_id = :session_id"),
+            {"session_id": request.session_id}
+        )
+        await db_session.commit()
+        
+        return {
+            "session_id": request.session_id,
+            "status": "closed"
+        }
+        
+    except Exception as e:
+        logger.error(f"Close session failed: {e}")
+        if db_session:
+            await db_session.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to close session: {str(e)}")
+    finally:
+        if db_session:
+            await db_session.close()
+
+
+
 
 @app.post("/auth/login")
 async def manual_login():
     """Manual login endpoint for testing"""
-    global auth_client
+    global service
     
     try:
-        if not auth_client:
+        if not service:
             raise HTTPException(status_code=503, detail="Auth client not initialized")
         
-        success = await auth_client.login()
+        success = await service.login()
         if success:
             return {
                 "message": "Login successful",
@@ -605,7 +901,7 @@ async def manual_login():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "ai_node_complete:app",
+        "api:app",
         host="0.0.0.0",
         port=int(os.getenv("PORT", 5000)),
         reload=os.getenv("ENVIRONMENT") == "development"

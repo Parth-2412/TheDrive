@@ -26,11 +26,7 @@ RUN useradd -m -u 1000 ainode && chown -R ainode:ainode /app
 USER ainode
 
 # Expose port
-EXPOSE 5000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5000/health || exit 1
+EXPOSE $PORT
 
 # Run the application
-CMD ["python", "api.py"]
+CMD ["python3", "api.py"]

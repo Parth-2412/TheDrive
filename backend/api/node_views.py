@@ -7,8 +7,10 @@ from .serializers import DocumentChunkSerializer
 from drf_spectacular.utils import extend_schema
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
+
+
 class ActionSerializer(serializers.Serializer):
-    user_public_key = serializers.UUIDField(help_text="The user the AI node's searching for")
+    public_key = serializers.UUIDField(help_text="The user the AI node's searching for")
 
 class GetFilesChunksSerializer(ActionSerializer):
    files = serializers.ListField(
@@ -19,7 +21,7 @@ class GetFilesChunksSerializer(ActionSerializer):
 
 class StoreFilesChunksSerializer(ActionSerializer):
    chunks = serializers.ListField(
-       child=DocumentChunkSerializer,
+       child=DocumentChunkSerializer(),
        allow_empty=False,
        help_text="Chunks to store"
    )
@@ -53,7 +55,18 @@ def store_chunks(request):
                 {'error': 'AI processing is not enabled for this file'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        #TODO: save the chunks
+        chunks_data = serializer.validated_data['chunks']  # Assuming 'chunks' field contains a list of chunks with embeddings
+        for chunk in chunks_data:
+            # Create and save the chunk with its embedding
+            DocumentChunk.objects.create(
+                file=file,
+                chunk_content_encrypted=chunk['chunk'],
+                embedding_encrypted=chunk['embedding'],
+                order_in_file=chunk['chunk_index'],
+                chunk_start=chunk['char_start'],
+                chunk_end=chunk['char_end'],
+            )
+
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

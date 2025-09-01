@@ -79,9 +79,6 @@ class AINode(models.Model):
     # AI node's RSA key pair (generated at build)
     public_key = models.TextField(unique=True, help_text="AI node's ED25519 public key")
     
-    # Network details
-    endpoint_url = models.URLField(help_text="AI node's API endpoint")
-    
     # Authorization and trust
     is_authorized = models.BooleanField(
         default=False, 
@@ -213,6 +210,8 @@ class DocumentChunk(models.Model):
     chunk_content_encrypted = models.TextField(help_text="Chunk content encrypted by the AI node")
     
     order_in_file = models.PositiveBigIntegerField(help_text="Order of the chunk in the file")
+    chunk_start = models.PositiveBigIntegerField(help_text="Chunk start index in the file")
+    chunk_end = models.PositiveBigIntegerField(help_text="Chunk end index in the file")
 
     # the file it belongs to
     file = models.ForeignKey(File, on_delete=models.CASCADE, help_text="The file the chunk belongs to")
@@ -223,7 +222,7 @@ class DocumentChunk(models.Model):
     # Embedding metadata
     ai_node = models.ForeignKey(AINode, on_delete=models.CASCADE)
 
-    embedding_dimension = models.IntegerField(help_text="Vector dimension")
+
     
     created_at = models.DateTimeField(auto_now_add=True)
     

@@ -9,68 +9,6 @@ services:
       - "8000:8000"  # Expose Django on port 8000
     depends_on:
       - minio
-      - postgres  # Add PostgreSQL as a dependency
-    environment:
-      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
-      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
-      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
-      - MINIO_ENDPOINT=minio:9000  # MinIO inside the container
-      - MINIO_SECURE=False
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_HOST=postgres  # Host name of PostgreSQL service
-    networks:
-      - network
-
-  minio:
-    image: minio/minio:latest
-    environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
-      - MINIO_WEB_UI=true   # Enable the web UI on port 9000
-    ports:
-      - "9000:9000"  # MinIO Web UI on port 9000
-      - "9001:9001"  # MinIO Console UI (optional)
-    volumes:
-      - minio-data:/data  # MinIO persistent storage
-    command: minio server --console-address ':9001' /data
-    networks:
-      - network
-
-  postgres:
-    image: postgres:13
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data  # PostgreSQL persistent storage
-    ports:
-      - "5432:5432"  # PostgreSQL default port
-    networks:
-      - network
-
-volumes:
-  minio-data:
-    driver: local
-  postgres-data:
-    driver: local
-
-networks:
-  network:
-    driver: bridge
-version: '3.8'
-
-services:
-  backend:
-    build: ./backend
-    volumes:
-      - ./backend:/app  # Mount the backend directory
-    ports:
-      - "8000:8000"  # Expose Django on port 8000
-    depends_on:
-      - minio
       - postgres  # Backend uses main PostgreSQL
     environment:
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
@@ -92,7 +30,7 @@ services:
     volumes:
       - ./ai_node:/app  # Mount the ai_node directory for development
     ports:
-      - "5000:5000"  # Expose FastAPI on port 5000
+      - "5001:5001"  # Expose FastAPI on port 5000
     depends_on:
       - ai_node_db  # AI node uses its own database
     environment:
@@ -101,8 +39,10 @@ services:
       # AI Node specific environment variables
       - PUBLIC_KEY=${AI_NODE_PUBLIC_KEY}
       - PRIVATE_KEY=${AI_NODE_PRIVATE_KEY}
-      - SERVER_URL=${AI_NODE_SERVER_URL}
-      - PORT=5000
+      - SERVER_URL=http://backend:8000
+      - MASTER_KEY=${AI_NODE_MASTER_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - PORT=5001
       - ENVIRONMENT=${ENVIRONMENT:-production}
       # Optional: Neon DB connection (if you want to use cloud instead)
       # - NEON_DATABASE_URL=${NEON_DATABASE_URL}
