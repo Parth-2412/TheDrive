@@ -8,8 +8,7 @@ import path from 'path'
 export default defineConfig({
   plugins: [
     react(),
-    legacy(),
-
+    legacy()
   ],
   resolve: {
     alias: {

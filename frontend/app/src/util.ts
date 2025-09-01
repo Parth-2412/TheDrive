@@ -1,4 +1,4 @@
-export const showError : (message ?: string) => {
+export const showError : (message ?: string, color ? : string) => {
   message : string;
   duration: number;
   color: string;

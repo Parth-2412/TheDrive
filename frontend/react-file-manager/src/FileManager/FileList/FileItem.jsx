@@ -43,8 +43,8 @@ const FileItem = ({
   const dragIconRef = useRef(null);
   const dragIcons = useFileIcons(dragIconSize);
 
-  const isAiActive = file.isAiActive; 
-
+  // const isAiActive = file.isAiActive; 
+  const ai_enabled = file.ai_enabled;
   const isFileMoving =
     clipBoard?.isMoving &&
     clipBoard.files.find((f) => f.name === file.name && f.path === file.path);
@@ -212,7 +212,7 @@ const FileItem = ({
             )
           )}
 
-          {isAiActive && (
+          {ai_enabled && (
             <span className="ai-mark">
               <TbSparkles size={10} />
             </span>

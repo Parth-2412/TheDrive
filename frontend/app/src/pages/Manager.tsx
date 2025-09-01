@@ -4,7 +4,7 @@ import { useCallback, useEffect,  useState } from "react";
 import './Manager.css';
 import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
 import { generateSHA256Hash, getFileSHA256Hash, importAesKey } from "../services/crypto.service";
-import { actualstringToUint8Array, stringToUint8Array } from "../services/helpers.service";
+import { fromBase64 } from "../services/helpers.service";
 import axiosInstance from "../services/api.service"; // Import axios instance
 import encryptFile, { decryptFileName, encryptName } from "../services/encrypt.service";
 import { useIonToast } from '@ionic/react';
@@ -113,7 +113,7 @@ const Manager: React.FC = () => {
               isDirectory: false,
               path: get_path(name, currentFolder),
               size: file.file_size,
-              downloadUrl: file.download_url,
+              download_url: file.download_url,
               updatedAt: file.updated_at
             }
           })
@@ -247,6 +247,53 @@ const Manager: React.FC = () => {
     }
   }
 
+  const handleAiModeChange = async (selectedFiles: IFile[]) => {
+    // console.log(object)
+    const updatedFiles = files.map((file) =>
+      selectedFiles.map(f => f.id).includes(file.id)
+            ? { ...file, ai_enabled: !file.ai_enabled }
+            : file
+        );
+        setFiles(updatedFiles);
+  };
+  const handleDownload = async (files : IFile[]) => {
+    files.map((file) => {
+      axiosInstance.get(`/api/files/${file.id}/download/`)
+        .then(async (response) => {
+          const fileData = fromBase64(response.data.file_data)
+          const iv = fromBase64(file.file_iv)
+          const wrap_iv = fromBase64(file.key_encrypted_iv)
+          const wrapped_key = fromBase64(file.key_encrypted)
+          const decryptedKey = await crypto.subtle.decrypt(
+            {name: "AES-GCM", iv: wrap_iv},
+            user.masterAesKey,
+            wrapped_key
+          );
+            await crypto.subtle.decrypt(
+              {
+                name: "AES-GCM",
+                iv: iv
+              },
+              await importAesKey(new Uint8Array(decryptedKey)),
+              fileData
+            ).then(decryptedData => {
+              const blob = new Blob([decryptedData]);
+              const url = window.URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.setAttribute('download', file.name);
+              document.body.appendChild(link);
+              link.click();
+              link.parentNode?.removeChild(link);
+            });
+        })
+        .catch(error => {
+          console.error('Error downloading file:', error);
+          present(showError());
+        });
+    })
+  }
+
 
   return (
     <FileManager 
@@ -269,6 +316,8 @@ const Manager: React.FC = () => {
       onRename={handleFileRename}
       //@ts-expect-error
       onFileUpload={handleUpload}
+      onAiModeChange={handleAiModeChange}
+      onDownload={handleDownload}
     />
   );
 };

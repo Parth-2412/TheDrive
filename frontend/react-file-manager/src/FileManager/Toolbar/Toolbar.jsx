@@ -19,7 +19,7 @@ import { validateApiCallback } from "../../utils/validateApiCallback";
 import { useTranslation } from "../../contexts/TranslationProvider";
 import "./Toolbar.scss";
 
-const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions, onNavChange }) => {
+const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions, onNavChange, onAiModeChange }) => {
   const [showToggleViewMenu, setShowToggleViewMenu] = useState(false);
   const navData = useFileNavigation();
   const { selectedFiles, setSelectedFiles, handleDownload } = useSelection();
@@ -121,22 +121,16 @@ const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions, onNavC
                 <span>{t("download")}</span>
               </button>
             )}
-          {selectedFiles.length === 1 && (
+          {selectedFiles.length > 0 && (
   <button
     className="item-action file-action"
     onClick={() => {
-      setCurrentPathFiles(prev =>
-        prev.map(f =>
-          f.path === selectedFiles[0].path
-            ? { ...f, isAiActive: !f.isAiActive } // toggle
-            : f
-        )
-      );
-    }}
+    onAiModeChange(selectedFiles);  // Pass the updated file to parent
+  }}
   >
     <TbSparkles size={18} />
     <span>
-      {currentPathFiles.find(f => f.path === selectedFiles[0].path)?.isAiActive ? "Disable AI Mode" : "Enable AI Mode"}
+      {currentPathFiles.find(f => f.path === selectedFiles[0].path)?.ai_enabled ? "Disable AI Mode" : "Enable AI Mode"}
     </span>
   </button>
 )}

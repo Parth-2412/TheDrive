@@ -42,6 +42,5 @@
   "repository": {
     "type": "git",
     "url": "your-repository-url"
-  },
-  "dependencies": {}
+  }
 }

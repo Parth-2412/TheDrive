@@ -54,7 +54,8 @@ const FileManager = ({
   permissions: userPermissions = {},
   collapsibleNav = false,
   defaultNavExpanded = true,
-  masterAesKey
+  masterAesKey,
+  onAiModeChange
 }) => {
   const [isNavigationPaneOpen, setNavigationPaneOpen] = useState(defaultNavExpanded);
   const triggerAction = useTriggerAction();
@@ -87,6 +88,7 @@ const FileManager = ({
                     triggerAction={triggerAction}
                     permissions={permissions}
                     onNavChange={onNavChange}
+                    onAiModeChange={onAiModeChange}
                   />
                   <section
                     ref={containerRef}
@@ -124,6 +126,7 @@ const FileManager = ({
                         enableFilePreview={enableFilePreview}
                         triggerAction={triggerAction}
                         permissions={permissions}
+                        onAiModeChange={onAiModeChange}
                       />
                     </div>
                   </section>
