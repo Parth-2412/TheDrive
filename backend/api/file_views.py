@@ -1,12 +1,9 @@
 # file_views.py
 import os
 import uuid
-import hashlib
-import mimetypes
-
-from django.http import StreamingHttpResponse
-from django.shortcuts import get_object_or_404
 from django.db import transaction
+from django.shortcuts import get_object_or_404
+from django.db import transaction, connection
 
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -51,7 +48,7 @@ class FolderSerializer(serializers.ModelSerializer):
     parent = serializers.CharField()
     class Meta:
         model = Folder
-        fields = ['id', 'name_encrypted', 'parent', 'ai_enabled', 'created_at', 'updated_at', 'folder_name_hash']
+        fields = ['id', 'name_encrypted', 'parent', 'created_at', 'updated_at', 'folder_name_hash']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def validate_parent(self, value):
@@ -231,7 +228,6 @@ def create_folder(request):
                 name_encrypted=serializer.validated_data['name_encrypted']              ,
                 parent_id=serializer.validated_data.get('parent'),
                 folder_name_hash=serializer.validated_data.get('folder_name_hash'),
-                ai_enabled=serializer.validated_data.get('ai_enabled', False),
             )
             
             
@@ -304,6 +300,31 @@ def rename_folder(request, folder_id):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+def collect_files(folder_id):
+    # Prepare the SQL query
+    query = """
+    WITH RECURSIVE file_hierarchy AS (
+        -- Base case: Select files directly in the given folder
+        SELECT f.id, f.name, f.folder_id
+        FROM files f
+        WHERE f.folder_id = %s
+
+        UNION ALL
+
+        -- Recursive case: Select files in subfolders
+        SELECT f.id, f.name, f.folder_id
+        FROM files f
+        JOIN file_hierarchy fh ON fh.id = f.folder_id
+    )
+    SELECT id, name FROM file_hierarchy;
+    """
+
+    # Execute the query with the given folder_id
+    with connection.cursor() as cursor:
+        cursor.execute(query, [folder_id])
+        result = cursor.fetchall()
+
+    return [r[0] for r in result]  # Returns a list of tuples [(id,), ...]
 
 @extend_schema(
     operation_id='delete_folder',
@@ -319,28 +340,15 @@ def delete_folder(request, folder_id):
     
     try:
         minio_client = get_minio_client()
-        
-        with transaction.atomic():
-            # Get all files in this folder and subfolders for MinIO deletion
-            def collect_files(folder : Folder):
-                files = []
-                for file in folder.files.all():
-                    files.append(file)
-                for subfolder in folder.subfolders.all():
-                    files.extend(collect_files(subfolder))
-                return files
+        files_to_delete = collect_files(folder)
+        folder.delete()
             
-            files_to_delete = collect_files(folder)
-            
-            # Delete from database (cascade will handle children)
-            folder.delete()
-            
-            # Delete from MinIO
-            for file in files_to_delete:
-                try:
-                    minio_client.remove_object(MINIO_BUCKET,get_file_path(file))
-                except S3Error:
-                    pass  # File might not exist
+        # Delete from MinIO
+        for file in files_to_delete:
+            try:
+                minio_client.remove_object(MINIO_BUCKET,get_file_path({ "id" : file}))
+            except S3Error:
+                pass  # File might not exist
         
         return Response(status=status.HTTP_204_NO_CONTENT)
         
@@ -379,31 +387,6 @@ def move_folder(request, folder_id):
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-@extend_schema(
-    operation_id='toggle_ai_enable_folder',
-    summary='Toggle AI enabled on/off on a folder',
-    description='Toggle AI enabled on/off on a folder',
-
-    tags=['Folders']
-)
-@api_view(['PATCH'])
-def toggle_ai_enable_folder(request, folder_id):
-    """List contents of a folder"""
-    if folder_id == 'root':
-        request.user.whole_context_ai_enabled = not request.user.whole_context_ai_enabled
-        request.user.save()
-        return Response(status=200)
-
-    folder = get_object_or_404(Folder,id=folder_id,user=request.user)
-    try:
-        folder.ai_enabled = not folder.ai_enabled
-        folder.save()
-        return Response(status=200)
-    except Exception as error:
-        return Response(
-            {'error': f'Failed to update file: {str(error)}'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
     
 # ============================================================================
 # FILE ENDPOINTS
@@ -544,42 +527,39 @@ def copy_file(request, file_id):
     serializer = CopySerializer(data=request.data, context={'request': request})
     
     if serializer.is_valid():
+        new_name = serializer.validated_data.get('name_encrypted')
+        new_file_id = uuid.uuid4()
+        new_minio_path = f'{new_file_id}.enc'
+        minio_client = get_minio_client()
         try:
-            minio_client = get_minio_client()
             
-            with transaction.atomic():
-                destination_folder_id = serializer.validated_data['destination_folder_id']
+            destination_folder_id = serializer.validated_data['destination_folder_id']
+            
+            copy_source = {'Bucket': MINIO_BUCKET, 'Key': get_file_path(file_record)}
+            minio_client.copy_object(
+                bucket_name=MINIO_BUCKET,
+                object_name=new_minio_path,
+                source=copy_source
+            )
+                # Create new file record
+            new_file = File.objects.create(
+                id=new_file_id,
+                user=request.user,
+                folder_id=destination_folder_id,
+                name_encrypted=new_name,
+                file_name_hash=serializer.validated_data.get('file_name_hash'),
+                file_size=file_record.file_size,
+                file_hash=file_record.file_hash,  # Same content, same hash
+                key_encrypted=serializer.validated_data.get('key_encrypted'),  
+                key_encrypted_iv=serializer.validated_data.get('key_encrypted_iv'),
+                file_iv=serializer.validated_data.get('file_iv'), 
+                ai_enabled=file_record.ai_enabled
+            )
                 
-                new_name = serializer.validated_data.get('name_encrypted')
-                new_minio_path = f'{new_file.id}.enc'
-
-                 # Create new file record
-                new_file = File.objects.create(
-                    user=request.user,
-                    folder_id=destination_folder_id,
-                    name_encrypted=new_name,
-                    file_name_hash=serializer.validated_data.get('file_name_hash'),
-                    minio_path=new_minio_path,
-                    file_size=file_record.file_size,
-                    file_hash=file_record.file_hash,  # Same content, same hash
-                    key_encrypted=serializer.validated_data.get('key_encrypted'),  
-                    key_encrypted_iv=serializer.validated_data.get('key_encrypted_iv'),
-                    file_iv=serializer.validated_data.get('file_iv'), 
-                    ai_enabled=file_record.ai_enabled
-                )
-                
-                # Copy file in MinIO
-                copy_source = {'Bucket': MINIO_BUCKET, 'Key': get_file_path(file_record)}
-                minio_client.copy_object(
-                    bucket_name=MINIO_BUCKET,
-                    object_name=new_minio_path,
-                    source=copy_source
-                )
-                
-                return Response(
-                    FileSerializer(new_file, context={'request': request}).data,
-                    status=status.HTTP_201_CREATED
-                )
+            return Response(
+                FileSerializer(new_file, context={'request': request}).data,
+                status=status.HTTP_201_CREATED
+            )
         
         except S3Error as e:
             return Response(
@@ -587,6 +567,7 @@ def copy_file(request, file_id):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         except Exception as e:
+            #TODO delete minio new file on error
             return Response(
                 {'error': f'Failed to copy file: {str(e)}'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -609,19 +590,10 @@ def delete_file(request, file_id):
     
     try:
         minio_client = get_minio_client()
-        
+        minio_path = get_file_path(file_record)
         with transaction.atomic():
-            file_size = file_record.file_size
-            minio_path = get_file_path(file_record)
-            
-            # Delete from database
             file_record.delete()
-            
-            # Delete from MinIO
-            try:
-                minio_client.remove_object(MINIO_BUCKET, minio_path)
-            except S3Error:
-                pass  # File might not exist in storage
+            minio_client.remove_object(MINIO_BUCKET, minio_path)
         
         return Response(status=status.HTTP_204_NO_CONTENT)
         
@@ -630,26 +602,117 @@ def delete_file(request, file_id):
             {'error': f'Failed to delete file: {str(e)}'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-    
+
 
 @extend_schema(
-    operation_id='toggle_ai_enable_file',
-    summary='Toggle AI enabled on/off on a file',
-    description='Toggle AI enabled on/off on a file',
-    responses={200: FileSerializer},
+    operation_id='disable_folder_ai',
+    summary='Disable AI on a folder',
+    description='Disable AI on all the files in the folder sub tree',
+    responses={204: None},
+    tags=['Folders']
+)
+@api_view(['DELETE'])
+def disable_folder_ai(request, folder_id):
+    """Disable AI on all the files in the folder sub tree"""
+    folder_record = get_object_or_404(Folder, id=folder_id, user=request.user)
+
+    try:
+        # Recursive query to get all files in the folder and its subfolders
+        query = """
+        WITH RECURSIVE file_hierarchy AS (
+            -- Base case: Select files directly in the given folder
+            SELECT f.id
+            FROM files f
+            WHERE f.folder_id = %s
+
+            UNION ALL
+
+            -- Recursive case: Select files in subfolders
+            SELECT f.id
+            FROM files f
+            JOIN file_hierarchy fh ON fh.id = f.folder_id
+        )
+        UPDATE files
+        SET ai_enabled = false
+        WHERE id IN (SELECT id FROM file_hierarchy);
+        """
+        
+        with connection.cursor() as cursor:
+            cursor.execute(query, [folder_id])
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    
+    except Exception as e:
+        return Response(
+            {'error': f'Failed to disable AI: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@extend_schema(
+    operation_id='enable_folder_ai',
+    summary='Enable AI on a folder',
+    description='Enable AI on all the files in the folder sub tree',
+    responses={204: None},
+    tags=['Folders']
+)
+@api_view(['PUT'])
+def enable_folder_ai(request, folder_id):
+    """Enable AI on all the files in the folder sub tree"""
+    folder_record = get_object_or_404(Folder, id=folder_id, user=request.user)
+
+    try:
+        # Recursive query to get all files in the folder and its subfolders
+        query = """
+        WITH RECURSIVE file_hierarchy AS (
+            -- Base case: Select files directly in the given folder
+            SELECT f.id
+            FROM files f
+            WHERE f.folder_id = %s
+
+            UNION ALL
+
+            -- Recursive case: Select files in subfolders
+            SELECT f.id
+            FROM files f
+            JOIN file_hierarchy fh ON fh.id = f.folder_id
+        )
+        UPDATE files
+        SET ai_enabled = true
+        WHERE id IN (SELECT id FROM file_hierarchy);
+        """
+
+        with connection.cursor() as cursor:
+            cursor.execute(query, [folder_id])
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    except Exception as e:
+        return Response(
+            {'error': f'Failed to enable AI: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@extend_schema(
+    operation_id='toggle_file_ai',
+    summary='Toggle AI on a file',
+    description='Toggle the AI-enabled state on a file',
+    responses={204: None},
     tags=['Files']
 )
 @api_view(['PATCH'])
-def toggle_ai_enable_file(request, file_id):
-    """List contents of a folder"""
+def toggle_file_ai(request, file_id):
+    """Toggle AI on a file"""
+    file_record = get_object_or_404(File, id=file_id, user=request.user)
 
-    file = get_object_or_404(File,id=file_id,user=request.user)
     try:
-        file.ai_enabled = not file.ai_enabled
-        file.save()
-        return Response(FileSerializer(file).data, 200)
-    except Exception as error:
+        # Toggle the ai_enabled field
+        file_record.ai_enabled = not file_record.ai_enabled
+        file_record.save()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    except Exception as e:
         return Response(
-            {'error': f'Failed to update file: {str(error)}'}, 
+            {'error': f'Failed to toggle AI on file: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

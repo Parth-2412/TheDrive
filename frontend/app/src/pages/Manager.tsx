@@ -39,6 +39,8 @@ interface IFolder extends StorageEntity {
 interface NavState {
   currentFolder: IFolder;
 }
+
+
 const ROOT_FOLDER : IFolder = {
   path : '/',
   parent: '',
@@ -180,11 +182,12 @@ const Manager: React.FC = () => {
     }
   }
 
-  async function handleUpload(fileData: { name : string; file : File}, currentFolder : IFolder) {
+  async function handleUpload(fileData: {  file : File}, currentFolder : IFolder) {
     if(sentUploadRequests.has(fileData.file.name)) return;
     sentUploadRequests.add(fileData.file.name);
     if(!currentFolder) currentFolder = ROOT_FOLDER;
     const encryptedData = await encryptFile(fileData.file, user.masterAesKey)
+
     const payload = {
       file_data: encryptedData.ciphertext,
       file_iv: encryptedData.file_iv,

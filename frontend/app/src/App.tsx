@@ -1,19 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { IonApp, IonPage, IonRouterOutlet, IonSpinner, IonButton, IonRouterLink, setupIonicReact, useIonToast } from '@ionic/react';
+import { IonApp, IonPage, IonRouterOutlet, IonSpinner, setupIonicReact, useIonToast } from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
 import { Route, Redirect } from 'react-router-dom'; // Using React Router v5
 import { useRecoilState } from 'recoil';
 import { userState } from './state/user';
 import { importAesKey } from './services/crypto.service';
-import { stringToUint8Array, toBase64, uint8ArrayToString } from './services/helpers.service';
+import { stringToUint8Array, uint8ArrayToString } from './services/helpers.service';
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 import { login_with_keys } from './services/auth.service';
-import Manager from './pages/Manager';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import axiosInstance from './services/api.service';
 import './global.css'
-import { showError } from './util';
+import ChatApp from './components/Chat';
+
 setupIonicReact();
 
 const App: React.FC = () => {
@@ -101,10 +101,6 @@ const App: React.FC = () => {
           await SecureStoragePlugin.set({ key: 'masterKey', value : uint8ArrayToString(new Uint8Array(await crypto.subtle.exportKey("raw", user.masterAesKey))) })
           setUser({ ...user, ...tokens, ready: true });
         } catch (error) {
-          if (error.request.status === 404) {
-            console.log("ASDdsfa")
-            present(showError('User not found. Please register.', 'danger'));
-          }
           console.error(error);
           setUser(null);
         }
@@ -137,8 +133,8 @@ const App: React.FC = () => {
               </>
             ) : (
               <>
-                <Route path="/">
-                  <Manager />
+                <Route exact path="/">
+                  <ChatApp />
                 </Route>
                 <Route render={() => <Redirect to='/' />} />
               </>

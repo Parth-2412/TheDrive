@@ -37,27 +37,9 @@ class FileProcessor:
             '.png': UnstructuredImageLoader,
         }
 
-    def _generate_chunk_id(self, file_name: str, chunk_index: int, char_start: int) -> str:
-        """Generate unique chunk ID for precise highlighting."""
-        combined = f"{file_name}-{chunk_index}-{char_start}"
-        return hashlib.md5(combined.encode()).hexdigest()[:12]
 
-    def _extract_page_number(self, doc: Document) -> int:
-        """Extract page number from document metadata."""
-        if 'page' in doc.metadata:
-            return doc.metadata['page']
-        elif 'source' in doc.metadata:
-            # Try to extract page from source string (common in PDF loaders)
-            source = str(doc.metadata.get('source', ''))
-            if 'page' in source:
-                try:
-                    return int(source.split('page')[-1].strip().split()[0])
-                except:
-                    pass
-        return 1  # Default to page 1
-
-    def process(self, file_path: str, original_filename: str = None, 
-                user_id: str = None, scope: str = None) -> Optional[List[Document]]:
+    
+    def process(self, file_path: str, original_filename: str = None) -> Optional[List[Document]]:
         """
         Process file with cross-referencing metadata for source attribution and highlighting.
         """
@@ -77,38 +59,21 @@ class FileProcessor:
             # Split documents with positional tracking
             chunked_docs = self.text_splitter.split_documents(raw_docs)
             
-            file_name = original_filename or os.path.basename(file_path)
+            file_name = original_filename
             
             # Add cross-referencing metadata to each chunk
             for chunk_index, chunk in enumerate(chunked_docs):
                 # Get character positions from text splitter
                 char_start = getattr(chunk.metadata, 'start_index', chunk_index * 1000)
                 char_end = char_start + len(chunk.page_content)
-                
-                # Generate unique chunk ID
-                chunk_id = self._generate_chunk_id(file_name, chunk_index, char_start)
-                
-                # Page number extraction
-                page_number = self._extract_page_number(chunk)
+
                 
                 # Cross-referencing metadata
                 chunk.metadata.update({
                     # File identification for source attribution
-                    'file': file_name,
-                    'file_path': file_path,
-                    'user_id': user_id,
-                    'scope': scope,
-                    
-                    # Precise location for highlighting
-                    'chunk_id': chunk_id,
                     'chunk_index': chunk_index,
-                    'page_number': page_number,
                     'char_start': char_start,
                     'char_end': char_end,
-                    
-                    # For file linking
-                    'file_size': os.path.getsize(file_path),
-                    'total_chunks': len(chunked_docs)  # Will be same for all chunks
                 })
             
             logging.info(f"Processed {file_name}: {len(chunked_docs)} chunks with cross-reference metadata")

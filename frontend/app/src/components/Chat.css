@@ -1,0 +1,115 @@
+
+
+
+.chat-mobile {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--chat-height);
+    background: white;
+    z-index: 9999;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+    display: flex;
+    flex-direction: column;
+}
+
+
+.ant-app {
+    height: 100% !important;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+.ant-pro-chat-chat-list-container {
+    flex: 1;
+}
+.chat-mobile.open {
+    transform: translateY(0);
+}
+
+.chat-mobile-handle {
+    cursor: s-resize;
+}
+.chat-mobile-handle > span {
+    width: 40px;
+    height: 4px;
+    background: #ddd;
+    border-radius: 2px;
+    margin: 12px auto;
+    display: block;
+}
+
+.chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    border-bottom: 1px solid #eee;
+    background: rgba(102, 126, 234, 0.05);
+}
+
+.chat-header-title {
+    font-weight: 600;
+    color: #333;
+    font-size: 18px;
+}
+
+.close-button {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.1);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.close-button:hover {
+    background: rgba(0,0,0,0.15);
+}
+
+.fab-chat {
+    position: fixed;
+    bottom: 40px;
+    right: 40px;
+    width: 64px !important;
+    height: 64px !important;
+    border-radius: 50% !important;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 1000;
+    transition: all 0.3s ease;
+    background-color: var(--ion-color-primary);
+    color: white;
+    padding: 5px;
+}
+
+.fab-chat:hover {
+    transform: scale(1.1);
+    cursor: pointer;
+}
+
+
+@media (min-width: 768px) {
+    .chat-mobile {
+    display: none;
+    }
+}
+
+
+.main-content {
+    flex: 1;
+    min-width: 0;
+}
+        
+        

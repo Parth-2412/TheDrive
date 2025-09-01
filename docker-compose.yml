@@ -9,7 +9,7 @@ services:
       - "8000:8000"  # Expose Django on port 8000
     depends_on:
       - minio
-      - postgres  # Add PostgreSQL as a dependency
+      - postgres  # Backend uses main PostgreSQL
     environment:
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
@@ -22,6 +22,34 @@ services:
       - POSTGRES_HOST=postgres  # Host name of PostgreSQL service
     networks:
       - network
+
+  ai_node:
+    build: 
+      context: ./ai_node
+      dockerfile: Dockerfile
+    volumes:
+      - ./ai_node:/app  # Mount the ai_node directory for development
+    ports:
+      - "5001:5001"  # Expose FastAPI on port 5000
+    depends_on:
+      - ai_node_db  # AI node uses its own database
+    environment:
+      # AI Node Database Configuration (separate from backend)
+      - DATABASE_URL=postgresql+asyncpg://${AI_NODE_DB_USER}:${AI_NODE_DB_PASSWORD}@ai_node_db:5432/${AI_NODE_DB_NAME}
+      # AI Node specific environment variables
+      - PUBLIC_KEY=${AI_NODE_PUBLIC_KEY}
+      - PRIVATE_KEY=${AI_NODE_PRIVATE_KEY}
+      - SERVER_URL=http://backend:8000
+      - MASTER_KEY=${AI_NODE_MASTER_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - PORT=5001
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      # Optional: Neon DB connection (if you want to use cloud instead)
+      # - NEON_DATABASE_URL=${NEON_DATABASE_URL}
+      # - DATABASE_URL=${NEON_DATABASE_URL}
+    networks:
+      - network
+    restart: unless-stopped
 
   minio:
     image: minio/minio:latest
@@ -38,6 +66,7 @@ services:
     networks:
       - network
 
+  # Main PostgreSQL database (for backend)
   postgres:
     image: postgres:16
     environment:
@@ -51,11 +80,43 @@ services:
     networks:
       - network
 
+  # Separate PostgreSQL database for AI Node
+  ai_node_db:
+    image: postgres:13
+    environment:
+      - POSTGRES_DB=${AI_NODE_DB_NAME}
+      - POSTGRES_USER=${AI_NODE_DB_USER}
+      - POSTGRES_PASSWORD=${AI_NODE_DB_PASSWORD}
+    volumes:
+      - ai_node_postgres_data:/var/lib/postgresql/data  # Separate storage
+    ports:
+      - "5433:5432"  # Different external port to avoid conflicts
+    networks:
+      - network
+
+  # Optional: PgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@example.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "5050:80"  # PgAdmin on port 5050
+    depends_on:
+      - postgres
+      - ai_node_db
+    networks:
+      - network
+    profiles:
+      - tools  # Optional profile - start with: docker-compose --profile tools up
+
 volumes:
   minio-data:
     driver: local
   postgres-data:
     driver: local
+  ai_node_postgres_data:
+    driver: local  # Separate volume for AI node database
 
 networks:
   network:

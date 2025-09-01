@@ -1,0 +1,225 @@
+# rag_pipeline.py
+"""
+Retrieval-Augmented Generation (RAG) pipeline with ChromaDB integration.
+Works with local ChromaDB instances for fast vector similarity search.
+"""
+
+from typing import List, Dict, Any, Optional
+import numpy as np
+import os
+from dotenv import load_dotenv
+import google.generativeai as genai
+from langchain_huggingface import HuggingFaceEmbeddings
+import chromadb
+import logging
+
+logger = logging.getLogger(__name__)
+
+class RAGPipeline:
+    def __init__(self, embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2", 
+                 gemini_model: str = "models/gemini-2.5-flash-lite"):
+        """
+        Initialize RAG pipeline with ChromaDB integration.
+        """
+        self.embedding_model = HuggingFaceEmbeddings(model_name=embedding_model_name)
+        
+        # Set up Gemini
+        load_dotenv()
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise ValueError("GOOGLE_API_KEY environment variable not set.")
+        genai.configure(api_key=api_key)
+        self.gemini = genai.GenerativeModel(gemini_model)
+
+    def cosine_similarity(self, a: List[float], b: List[float]) -> float:
+        """Calculate cosine similarity between two vectors."""
+        a = np.array(a)
+        b = np.array(b)
+        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+    async def retrieve_context_from_chromadb(self, vector_db_path: str, query: str, k: int = 5) -> List[Dict[str, Any]]:
+        """
+        Retrieve top-k relevant chunks from ChromaDB based on semantic similarity.
+        """
+        try:
+            # Generate query embedding
+            query_embedding = self.embedding_model.embed_query(query)
+            
+            # Connect to ChromaDB
+            client = chromadb.PersistentClient(path=vector_db_path)
+            collection = client.get_collection("documents")
+            
+            # Query ChromaDB for similar chunks
+            results = collection.query(
+                query_embeddings=[query_embedding],
+                n_results=k,
+                include=["documents", "metadatas", "distances"]
+            )
+            
+            if not results["documents"][0]:
+                return []
+            
+            # Format results for consistency
+            chunks_with_similarity = []
+            for i, (doc, metadata, distance) in enumerate(zip(
+                results["documents"][0], 
+                results["metadatas"][0], 
+                results["distances"][0]
+            )):
+                # Convert distance to similarity (ChromaDB returns L2 distance)
+                similarity = 1 / (1 + distance)  # Simple conversion
+                
+                chunks_with_similarity.append({
+                    "content": doc,
+                    "metadata": metadata,
+                    "similarity": similarity
+                })
+            
+            return chunks_with_similarity
+            
+        except Exception as e:
+            logger.error(f"Error retrieving context from ChromaDB: {e}")
+            return []
+
+    def generate_answer(self, query: str, context_chunks: List[Dict[str, Any]], 
+                       memory: Optional[List[Dict]] = None) -> Dict[str, Any]:
+        """
+        Generate answer with enhanced source attribution.
+        """
+        if not context_chunks:
+            return {
+                "answer": "I couldn't find any relevant information to answer your question.",
+                "citations": [],
+                "context_chunks_used": 0
+            }
+        
+        # Build context with numbered sources for precise attribution
+        context_parts = []
+        for i, chunk in enumerate(context_chunks):
+            meta = chunk['metadata']
+            file_name = meta.get('file_name', 'Unknown')
+            chunk_idx = meta.get('chunk_index', i)
+            
+            source_label = f"[Source {i+1}: {file_name}, Chunk {chunk_idx}]"
+            context_parts.append(f"{source_label}\n{chunk['content']}\n")
+        
+        context_text = "\n".join(context_parts)
+        
+        # Build memory context
+        memory_text = ""
+        if memory:
+            memory_text = "\n\nConversation History:\n" + "\n".join([
+                f"{msg['role'].upper()}: {msg['content']}" for msg in memory[-6:]  # Last 3 exchanges
+            ])
+        
+        # Enhanced prompt for source attribution
+        prompt = f"""You are a helpful AI assistant. Answer the user's question using the provided context.
+
+IMPORTANT: When referencing information, cite the specific source using the format [Source X] where X matches the source number provided in the context.
+
+Context from Documents:
+{context_text}
+{memory_text}
+
+Current Question: {query}
+
+Instructions:
+- Use the provided context to answer the question accurately
+- Always cite sources using [Source X] format when referencing information
+- If information comes from multiple sources, cite all relevant sources like [Source 1][Source 2]
+- Be specific about which source supports each claim
+- If the context doesn't contain enough information, say so clearly
+- Maintain consistency with the conversation history
+- Be concise but comprehensive
+
+Answer:"""
+
+        try:
+            # Generate response
+            response = self.gemini.generate_content(prompt)
+            answer = response.text.strip() if hasattr(response, 'text') else str(response)
+        except Exception as e:
+            logger.error(f"Error generating answer with Gemini: {e}")
+            answer = "I apologize, but I encountered an error while generating the response. Please try again."
+        
+        # Prepare enhanced citations
+        citations = []
+        for i, chunk in enumerate(context_chunks):
+            meta = chunk['metadata']
+            citations.append({
+                "source_id": i + 1,
+                "file_name": meta.get('file_name', 'Unknown'),
+                "file_id": meta.get('file_id', 'Unknown'),
+                "chunk_index": meta.get('chunk_index', i),
+                "char_start": meta.get('char_start', 0),
+                "char_end": meta.get('char_end', 0),
+                "similarity": round(chunk.get("similarity", 0), 3),
+                "chunk_content": chunk['content']
+            })
+        
+        return {
+            "answer": answer,
+            "citations": citations,
+            "context_chunks_used": len(context_chunks)
+        }
+
+    async def run_with_chromadb(self, vector_db_path: str, query: str, 
+                               memory: Optional[List[Dict]] = None, k: int = 5) -> Dict[str, Any]:
+        """
+        Full RAG pipeline using ChromaDB:
+        1. Retrieve relevant chunks from ChromaDB
+        2. Generate answer with context and memory
+        3. Return response with detailed citations
+        """
+        # Check if vector database exists
+        if not os.path.exists(vector_db_path):
+            return {
+                "answer": "The chat session vector database could not be found. Please start a new session.",
+                "citations": [],
+                "context_chunks_used": 0
+            }
+        
+        # Retrieve context from ChromaDB
+        context_chunks = await self.retrieve_context_from_chromadb(vector_db_path, query, k)
+        
+        if not context_chunks:
+            return {
+                "answer": "I couldn't find any relevant information in the loaded documents to answer your question.",
+                "citations": [],
+                "context_chunks_used": 0
+            }
+        
+        # Generate answer with citations
+        return self.generate_answer(query, context_chunks, memory)
+
+    async def get_all_chunks_info(self, vector_db_path: str) -> List[Dict[str, Any]]:
+        """
+        Get information about all chunks in the ChromaDB collection.
+        Useful for debugging and session management.
+        """
+        try:
+            client = chromadb.PersistentClient(path=vector_db_path)
+            collection = client.get_collection("documents")
+            
+            # Get all documents
+            results = collection.get(
+                include=["documents", "metadatas"]
+            )
+            
+            chunks_info = []
+            for i, (doc, metadata) in enumerate(zip(results["documents"], results["metadatas"])):
+                chunks_info.append({
+                    "chunk_index": i,
+                    "file_name": metadata.get('file_name', 'Unknown'),
+                    "file_id": metadata.get('file_id', 'Unknown'),
+                    "char_start": metadata.get('char_start', 0),
+                    "char_end": metadata.get('char_end', 0),
+                    "content_preview": doc[:100] + "..." if len(doc) > 100 else doc,
+                    "content_length": len(doc)
+                })
+            
+            return chunks_info
+            
+        except Exception as e:
+            logger.error(f"Error getting chunks info: {e}")
+            return []

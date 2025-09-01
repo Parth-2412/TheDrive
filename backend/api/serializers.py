@@ -1,4 +1,4 @@
-from .models import DriveUser, AuthNonce
+from .models import DriveUser, AuthNonce, DocumentChunk
 from rest_framework import serializers
 
 class DriveUserSerializer(serializers.ModelSerializer):
@@ -11,3 +11,22 @@ class NonceSerializer(serializers.ModelSerializer):
         model = AuthNonce
         fields = ['nonce', 'challenge_message', 'expires_at']
         read_only_fields = ['nonce', 'challenge_message', 'expires_at']
+
+class DocumentChunkSerializer(serializers.ModelSerializer):
+    """Serializer for document chunks and their embeddings."""
+    
+    class Meta:
+        model = DocumentChunk
+        fields = ['id', 'chunk_content_encrypted', 'order_in_file', 'embedding_encrypted', 
+                  'ai_node', 'embedding_dimension', 'file', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def validate(self, data):
+        """
+        Additional validation (optional, such as ensuring chunk order is unique for a file).
+        """
+        # Validate that order_in_file is unique for a given file
+        file = self.context.get('file')
+        if DocumentChunk.objects.filter(file=file, order_in_file=data['order_in_file']).exists():
+            raise serializers.ValidationError('Chunk order already exists for this file.')
+        return data

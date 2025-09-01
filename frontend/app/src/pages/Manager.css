@@ -1,5 +1,5 @@
 .bread-crumb-container .breadcrumb {
-    --breadcrumb-height : 48px;
+    --breadcrumb-height : 50px;
     height: var(--breadcrumb-height) !important;
     min-height: var(--breadcrumb-height) !important;
     max-height: var(--breadcrumb-height) !important;
@@ -13,6 +13,47 @@
 
 }
 
+.file-explorer {
+    height: 100vh !important;
+    scrollbar-width: none;
+}
 .folders-preview {
     width : 100% !important;
+}
+
+.fm-modal {
+    width: 80% !important;
+}
+
+.file-explorer:-webkit-scrollbar {
+  display: none;          /* for Chrome, Safari, Edge */
+}
+
+.toolbar {
+    min-height: 50px !important;
+    max-height: none !important;
+    height: auto !important;
+    display: flex;
+    justify-content: center;
+}
+
+.file-action-container, .fm-toolbar {
+    margin: auto;
+    width: 100%;
+}
+
+.file-action-container, .fm-toolbar > :first-child {
+    overflow-x: scroll;
+}
+
+.file-action-container > :first-child  {
+    overflow-x: scroll;
+    scrollbar-width: none;
+}
+.file-action-container, .fm-toolbar > :first-child:-webkit-scrollbar {
+  display: none;          /* for Chrome, Safari, Edge */
+}
+
+.file-action-container, .fm-toolbar > :first-child > button  {
+    white-space: nowrap;
 }
