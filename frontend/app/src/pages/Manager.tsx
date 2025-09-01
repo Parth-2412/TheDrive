@@ -380,6 +380,7 @@ const Manager: React.FC = () => {
   return (
     <FileManager 
       onNavChange={(navData : NavState) => {
+        console.log(navData)
         if(navData.currentFolder == null ){
           if(currentFolder.id != 'root'){
             setNavState({...navState, currentFolder : ROOT_FOLDER})

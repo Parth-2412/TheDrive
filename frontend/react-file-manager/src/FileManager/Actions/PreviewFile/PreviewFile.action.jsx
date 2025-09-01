@@ -11,6 +11,7 @@ import { useTranslation } from "../../../contexts/TranslationProvider";
 import * as XLSX from 'xlsx';
 import { renderAsync } from 'docx-preview';
 import "./PreviewFile.action.scss";
+import { getMimeType } from "../../../../../app/src/util";
 
 
 const imageExtensions = ["jpg", "jpeg", "png"];
@@ -52,7 +53,7 @@ const PreviewFileAction = ({ filePreviewPath, filePreviewComponent, onDownload, 
         try {
           setIsLoading(true);
           const decryptedData = await onDecryption(selectedFiles[0]);
-          const blob = new Blob([decryptedData]);
+          const blob = new Blob([decryptedData], { type : getMimeType(selectedFiles[0].name)});
           const blobUrl = URL.createObjectURL(blob);
           setDecryptedBlobUrl(blobUrl);
           

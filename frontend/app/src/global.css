@@ -17,7 +17,8 @@
   height: calc(100% - 90px) !important;
 }
 
-body {
+.ion-page {
   background-color: rgb(244, 244, 244);
-
+  justify-content: center !important;
+  align-items: center;
 }
