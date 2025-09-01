@@ -20,7 +20,9 @@ const Actions = ({
   triggerAction,
   permissions,
   masterAesKey,
-  onFileUpload
+  onFileUpload,
+  onDownload,
+  onDecryption
 }) => {
   const [activeAction, setActiveAction] = useState(null);
   const { selectedFiles } = useSelection();
@@ -55,6 +57,8 @@ const Actions = ({
         <PreviewFileAction
           filePreviewPath={filePreviewPath}
           filePreviewComponent={filePreviewComponent}
+          onDownload={onDownload}
+          onDecryption={onDecryption}
         />
       ),
       width: "50%",

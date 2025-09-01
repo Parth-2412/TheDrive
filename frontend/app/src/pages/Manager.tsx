@@ -212,6 +212,8 @@ const Manager: React.FC = () => {
         path : get_path(fileData.file.name, currentFolder),
         name : fileData.file.name,
         isDirectory: false,
+        updatedAt: new Date().toISOString(),
+        size: fileData.file.size
       }
     
       setFiles(currFiles => [...currFiles, file ])          
@@ -256,45 +258,58 @@ const Manager: React.FC = () => {
         );
         setFiles(updatedFiles);
   };
-  const handleDownload = async (files : IFile[]) => {
-    files.map((file) => {
-      axiosInstance.get(`/api/files/${file.id}/download/`)
-        .then(async (response) => {
-          const fileData = fromBase64(response.data.file_data)
-          const iv = fromBase64(file.file_iv)
-          const wrap_iv = fromBase64(file.key_encrypted_iv)
-          const wrapped_key = fromBase64(file.key_encrypted)
-          const decryptedKey = await crypto.subtle.decrypt(
-            {name: "AES-GCM", iv: wrap_iv},
-            user.masterAesKey,
-            wrapped_key
-          );
-            await crypto.subtle.decrypt(
-              {
-                name: "AES-GCM",
-                iv: iv
-              },
-              await importAesKey(new Uint8Array(decryptedKey)),
-              fileData
-            ).then(decryptedData => {
-              const blob = new Blob([decryptedData]);
-              const url = window.URL.createObjectURL(blob);
-              const link = document.createElement('a');
-              link.href = url;
-              link.setAttribute('download', file.name);
-              document.body.appendChild(link);
-              link.click();
-              link.parentNode?.removeChild(link);
-            });
-        })
-        .catch(error => {
-          console.error('Error downloading file:', error);
-          present(showError());
-        });
-    })
+
+  const handleDecryption = async (file: IFile): Promise<ArrayBuffer> => {
+    const response = await axiosInstance.get(`/api/files/${file.id}/download/`);
+    const fileData = fromBase64(response.data.file_data)
+    const iv = fromBase64(file.file_iv)
+    const wrap_iv = fromBase64(file.key_encrypted_iv)
+    const wrapped_key = fromBase64(file.key_encrypted)
+    
+    const decryptedKey = await crypto.subtle.decrypt(
+      {name: "AES-GCM", iv: wrap_iv},
+      user.masterAesKey,
+      wrapped_key
+    );
+    
+    const decryptedData = await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: iv
+      },
+      await importAesKey(new Uint8Array(decryptedKey)),
+      fileData
+    );
+    
+    return decryptedData;
   }
 
+  const handleDownload = async (files : IFile[]) => {
+    files.map(async (file) => {
+      console.log(file)
+      try {
+        const decryptedData = await handleDecryption(file);
+        const blob = new Blob([decryptedData]);
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', file.name);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode?.removeChild(link);
+      } catch (error) {
+        console.error('Error downloading file:', error);
+        present(showError());
+      }
+    })
+  }
+  const handleRefresh = async () => {
+    setFiles([]);
+    if(!user.masterAesKey) return;
+    fetchFolderFiles(currentFolder,user.masterAesKey);
+  }
 
+  console.log("filepreviewpath    ", import.meta.env.VITE_API_FILES_BASE_URL)
   return (
     <FileManager 
       onNavChange={(navData : NavState) => {
@@ -318,6 +333,10 @@ const Manager: React.FC = () => {
       onFileUpload={handleUpload}
       onAiModeChange={handleAiModeChange}
       onDownload={handleDownload}
+      filePreviewPath={import.meta.env.VITE_API_FILES_BASE_URL}
+      onDecryption={handleDecryption}
+      height="100vh"
+      onRefresh={handleRefresh}
     />
   );
 };
