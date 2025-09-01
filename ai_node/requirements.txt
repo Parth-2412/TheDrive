@@ -17,3 +17,15 @@ numpy
 chromadb
 google-generativeai
 python-multipart
+pypdf
+python-docx
+unstructured[pptx]
+unstructured-inference
+unstructured-pytesseract
+openpyxl
+pandas
+pytesseract
+Pillow
+pdfminer.six
+pi-heif
+pdf2image

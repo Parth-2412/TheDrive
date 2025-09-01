@@ -10,6 +10,8 @@ services:
     depends_on:
       - minio
       - postgres  # Backend uses main PostgreSQL
+    links:
+      - postgres:postgres
     environment:
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}

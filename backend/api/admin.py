@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import DriveUser, AINode, Folder, File
+from .models import DriveUser, AINode, Folder, File, DocumentChunk
 
 # Base ModelAdmin that includes all fields, but handles relations properly
 class AllFieldsAdmin(admin.ModelAdmin):
@@ -10,7 +10,7 @@ class AllFieldsAdmin(admin.ModelAdmin):
         return readonly_fields
 
 # Register the models with the customized ModelAdmin
-all_models = [DriveUser, AINode, Folder, File]
+all_models = [DriveUser, AINode, Folder, File, DocumentChunk]
 
 for model in all_models:
     try:

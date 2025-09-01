@@ -169,7 +169,6 @@ class YesNoResponseSerializer(serializers.Serializer):
     operation_id='get_chunks_for_files',
     summary='Get chunks/embeddings for the given files',
     description='Get document chunks and their embeddings for the given files',
-    request=ActionSerializer,
     responses={200 : YesNoResponseSerializer},
     tags=['Chunks']
 )
@@ -178,15 +177,13 @@ def check_if_user(request):
     """
     Check if there exists a user 
     """
-    serializer = ActionSerializer(data=request.data)
-    if serializer.is_valid():
-        try:
-            get_user_for_ai_node(serializer.validated_data['public_key'], request.user)
-            return Response({"response" : "yes"})
-        except Http404 as e:
-            return Response({"response" : "no"})
-        except Exception as e:
-            raise e
-        
-    else:
-        return Response(serializer.errors, status=400)
+    try:
+        public_key = request.query_params.get('public_key')
+
+        get_user_for_ai_node(public_key, AINode.objects.filter(public_key=request.user).first())
+        return Response({"response" : "yes"})
+    except Http404 as e:
+        return Response({"response" : "no"}, status=400)
+    except Exception as e:
+        print(f"[ERROR]: {str(e)}")
+        return Response({"error" : "Something went wrong."}, status=500)

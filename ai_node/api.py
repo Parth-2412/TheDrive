@@ -67,11 +67,12 @@ class ChatMessage(BaseModel):
 
 class FileIngestResponse(BaseModel):
     file_id: str = Field(..., description="File id")
+    filename: str = Field(..., description="File name")
     num_chunks: int = Field(..., ge=0, description="Number of chunks created from the file")
 
     model_config = {
         "json_schema_extra": {
-            "examples": [{"file": "notes.pdf", "num_chunks": 37}]
+            "examples": [{"filename": "notes.pdf", "file_id": "37848489w0", "num_chunks": 37}]
         }
     }
 
@@ -179,6 +180,7 @@ class ServerService:
                  server_base_url: str, 
                  public_key: bytes, 
                  private_key: bytes,
+                 master_key: bytes,
                  username: str):
         self.server_base_url = server_base_url.rstrip('/')
         self.credentials = AINodeCredentials(
@@ -186,6 +188,7 @@ class ServerService:
             private_key=private_key,
             username=username
         )
+        self.master_key = master_key
         self.client = httpx.AsyncClient(timeout=30.0)  # Add timeout
         self._setup_client()
     
@@ -402,7 +405,6 @@ async def verify_user_signature(signed_request: SignedRequest[T]) -> T:
     # Get the components
     public_key_hex = signed_request.public_key
     signature_hex = signed_request.signature
-    print(signature_hex)
     data = signed_request.data
     
     # Convert hex to bytes
@@ -415,13 +417,13 @@ async def verify_user_signature(signed_request: SignedRequest[T]) -> T:
     try:
         verify_key = nacl.signing.VerifyKey(public_key_bytes)
         
-        # TODO: verify if user exists in the database
         # Verify the signature
         verify_key.verify(
             message_to_verify.encode('utf-8'),
             signature_bytes,
         )
-        response = await service.get('/api/is-user', { "public_key" : public_key_hex})
+        response = await service.get(f'/api/is_user/?public_key={public_key_hex}')
+        print(response.json())
         if response.json()["response"] != "yes":
                 raise HTTPException(status_code=404, detail="User not found")
         logger.info(f"Signature verification successful for public key: {public_key_hex[:16]}...")
@@ -447,6 +449,7 @@ def initialize_ai_node_auth() -> ServerService:
     public_key_hex = os.getenv('PUBLIC_KEY')
     private_key_hex = os.getenv('PRIVATE_KEY')
     server_url = os.getenv('SERVER_URL')
+    master_key_hex = os.getenv('MASTER_KEY')
     
     if not all([public_key_hex, private_key_hex, server_url]):
         raise ValueError("Missing required environment variables: PUBLIC_KEY, PRIVATE_KEY, SERVER_URL")
@@ -454,6 +457,7 @@ def initialize_ai_node_auth() -> ServerService:
     try:
         public_key = bytes.fromhex(public_key_hex)
         private_key = bytes.fromhex(private_key_hex)
+        master_key = bytes.fromhex(master_key_hex)
     except ValueError as e:
         raise ValueError(f"Invalid hex format in keys: {e}")
     
@@ -463,6 +467,7 @@ def initialize_ai_node_auth() -> ServerService:
         server_base_url=server_url,
         public_key=public_key,
         private_key=private_key,
+        master_key=master_key,
         username=username
     )
 
@@ -559,7 +564,6 @@ async def ingest(
     try:
         # Manually parse the JSON string into a Python dictionary
         signed_request = json.loads(signed_request)
-        print(signed_request)
         # Validate the parsed data using Pydantic model
         signed_request = SignedRequest[IngestRequest](**signed_request)
         request = await verify_user_signature(signed_request)
@@ -597,7 +601,7 @@ async def ingest(
 
     # Generate embeddings
     embedder = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    print("generated dawg")
+
     texts = [doc.page_content for doc in processed_docs]
     embeddings = embedder.embed_documents(texts)
 
@@ -607,8 +611,8 @@ async def ingest(
         clean_chunk = doc.page_content.replace('\x00', '')
         
         chunk_obj = {
-            "chunk": encrypt_input(clean_chunk), 
-            "embedding": encrypt_input_bytes(np.array(emb, dtype=np.float32)), 
+            "chunk": encrypt_input(clean_chunk, master_aes_key=service.master_key), 
+            "embedding": encrypt_input_bytes(np.array(emb, dtype=np.float32).tobytes(), master_aes_key=service.master_key), 
         }
         chunk_obj.update(doc.metadata)
         chunks.append(chunk_obj)
@@ -616,11 +620,11 @@ async def ingest(
 
 
     payload = {"chunks": chunks, "file_id" : file_id}
-    await service.post('/api/chunks/store', json=payload )
+    await service.post('/api/chunks/store/', json=payload )
     return {
-        "file": filename,
+        "filename": filename,
+        "file_id": file_id,
         "num_chunks": len(chunks),
-        "status": "success"
     }
         
     
