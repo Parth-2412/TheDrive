@@ -209,6 +209,8 @@ const Manager: React.FC = () => {
         path : get_path(fileData.file.name, currentFolder),
         name : fileData.file.name,
         isDirectory: false,
+        updatedAt: new Date().toISOString(),
+        size: fileData.file.size
       }
     
       setFiles(currFiles => [...currFiles, file ])          
@@ -298,6 +300,11 @@ const Manager: React.FC = () => {
       }
     })
   }
+  const handleRefresh = async () => {
+    setFiles([]);
+    if(!user.masterAesKey) return;
+    fetchFolderFiles(currentFolder,user.masterAesKey);
+  }
 
   console.log("filepreviewpath    ", import.meta.env.VITE_API_FILES_BASE_URL)
   return (
@@ -325,6 +332,8 @@ const Manager: React.FC = () => {
       onDownload={handleDownload}
       filePreviewPath={import.meta.env.VITE_API_FILES_BASE_URL}
       onDecryption={handleDecryption}
+      height="100vh"
+      onRefresh={handleRefresh}
     />
   );
 };

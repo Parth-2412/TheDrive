@@ -16,9 +16,8 @@ import "./PreviewFile.action.scss";
 const imageExtensions = ["jpg", "jpeg", "png"];
 const videoExtensions = ["mp4", "mov", "avi"];
 const audioExtensions = ["mp3", "wav", "m4a"];
-const iFrameExtensions = ["txt"];
 const pdfExtensions = ["pdf"];
-const textExtensions = ["md", "json", "js", "css", "html", "xml"];
+const textExtensions = ["txt", "md", "sh", "json", "js", "css", "html", "xml"];
 const csvExtensions = ["csv"];
 const excelExtensions = ["xlsx", "xls"];
 const wordExtensions = ["docx"];
@@ -199,7 +198,6 @@ const PreviewFileAction = ({ filePreviewPath, filePreviewComponent, onDownload, 
           ...imageExtensions,
           ...videoExtensions,
           ...audioExtensions,
-          ...iFrameExtensions,
           ...pdfExtensions,
           ...textExtensions,
           ...csvExtensions,
@@ -259,17 +257,6 @@ const PreviewFileAction = ({ filePreviewPath, filePreviewComponent, onDownload, 
       )}
       {audioExtensions.includes(extension) && (
         <audio src={displayPath} controls autoPlay className="audio-preview" />
-      )}
-      {iFrameExtensions.includes(extension) && (
-        <>
-          <iframe
-            src={displayPath}
-            onLoad={handleImageLoad}
-            onError={handleImageError}
-            frameBorder="0"
-            className={`photo-popup-iframe ${isLoading ? "img-loading" : ""}`}
-          ></iframe>
-        </>
       )}
       {pdfExtensions.includes(extension) && (
         <>
@@ -493,7 +480,8 @@ const PreviewFileAction = ({ filePreviewPath, filePreviewComponent, onDownload, 
             </div>
           </div>
         </>
-      )}      {textExtensions.includes(extension) && !hasError && (
+      )}     
+       {textExtensions.includes(extension) && !hasError && (
         <>
           <Loader isLoading={isLoading} />
           <div className="text-preview-container">
