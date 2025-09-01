@@ -44,6 +44,12 @@ export async function importAesKey(raw: Uint8Array, usages: KeyUsage[] = ['encry
   );
 }
 
+export function uint8ArrayToHex(uint8Array : Uint8Array) {
+    return Array.from(uint8Array)
+        .map(byte => byte.toString(16).padStart(2, '0'))  // Convert each byte to hex, ensuring it's 2 characters
+        .join('');  // Join the array of hex values into a single string
+}
+
 
 async function _generateSHA256Hash(data : Uint8Array<ArrayBuffer>) {
 
@@ -63,4 +69,23 @@ export async function getFileSHA256Hash(file: File) {
     const arrayBuffer = await file.arrayBuffer(); // Convert the File object to an ArrayBuffer
     const hash = await _generateSHA256Hash(new Uint8Array(arrayBuffer)); // Generate SHA-256 hash from the ArrayBuffer
     return hash;
+}
+
+export async function generateSignature(privateKey: Uint8Array, dataJson: string): Promise<string> {
+
+  // The secret key is the first 32 bytes of the private key
+  const secretKey = privateKey.slice(0, 32);
+
+  // Convert the JSON string to a Uint8Array
+  const encoder = new TextEncoder();
+  const dataBuffer = encoder.encode(dataJson);
+
+  // Create the signing key from the secret key (32 bytes)
+  const signingKey = nacl.sign.keyPair.fromSeed(secretKey);
+
+  // Sign the data
+  const signature = nacl.sign.detached(dataBuffer, signingKey.secretKey);
+
+  // Return the signature as a hexadecimal string
+  return Buffer.from(signature).toString('hex');
 }

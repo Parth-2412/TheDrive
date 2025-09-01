@@ -3,14 +3,15 @@ import "../../../react-file-manager/dist/style.css";
 import { useCallback, useEffect,  useState } from "react";
 import './Manager.css';
 import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
-import { generateSHA256Hash, getFileSHA256Hash, importAesKey } from "../services/crypto.service";
-import { fromBase64 } from "../services/helpers.service";
-import axiosInstance from "../services/api.service"; // Import axios instance
+import { generateSHA256Hash, generateSignature, getFileSHA256Hash, importAesKey, uint8ArrayToHex } from "../services/crypto.service";
+import { fromBase64, uint8ArrayToString } from "../services/helpers.service";
+import axiosInstance, { aiNodeInstance } from "../services/api.service"; // Import axios instance
 import encryptFile, { decryptFileName, encryptName } from "../services/encrypt.service";
 import { useIonToast } from '@ionic/react';
-import { showError } from "../util";
+import { getMimeType, showError } from "../util";
 import { RecoilState, useRecoilState } from "recoil";
 import { User, userState } from "../state/user";
+import { checkAllFilesSame } from "../../../react-file-manager/src/utils/checkAllFilesSame";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
 
@@ -99,7 +100,7 @@ const Manager: React.FC = () => {
                   name,  // Await the decryption
                   isDirectory: true,
                   path: get_path(name, currentFolder),
-                  updatedAt: folder.updated_at
+                  updatedAt: folder.updated_at,
                 }
               })
           );
@@ -114,13 +115,14 @@ const Manager: React.FC = () => {
               path: get_path(name, currentFolder),
               size: file.file_size,
               download_url: file.download_url,
-              updatedAt: file.updated_at
+              updatedAt: file.updated_at,
+              ai_enabled: file.ai_enabled,
             }
           })
         );
 
-
-          setFiles(current_files => removeDuplicates([...current_files,...folders, ...sub_files])); // Combine folders and files into one array
+       
+        setFiles(current_files => removeDuplicates([...current_files,...folders, ...sub_files])); // Combine folders and files into one array
         
       } catch (error) {
         console.error("Error fetching root files:", error);
@@ -140,8 +142,6 @@ const Manager: React.FC = () => {
     };
     fetchFolderFiles(currentFolder,user.masterAesKey);
   }, [user.masterAesKey,  currentFolder]);
-
-  console.log(files)
 
   const handleFileRename = async (file: IFile | IFolder, newName: string) => {
     
@@ -197,6 +197,7 @@ const Manager: React.FC = () => {
       file_name_hash : await generateSHA256Hash(fileData.file.name),
       file_hash : await getFileSHA256Hash(fileData.file),
       folder: currentFolder.id,
+      ai_enabled : false,
     };
 
     // Use Axios to send the encrypted data
@@ -213,7 +214,8 @@ const Manager: React.FC = () => {
         name : fileData.file.name,
         isDirectory: false,
         updatedAt: new Date().toISOString(),
-        size: fileData.file.size
+        size: fileData.file.size,
+        ai_enabled: false,
       }
     
       setFiles(currFiles => [...currFiles, file ])          
@@ -249,14 +251,60 @@ const Manager: React.FC = () => {
     }
   }
 
-  const handleAiModeChange = async (selectedFiles: IFile[]) => {
-    // console.log(object)
-    const updatedFiles = files.map((file) =>
-      selectedFiles.map(f => f.id).includes(file.id)
-            ? { ...file, ai_enabled: !file.ai_enabled }
-            : file
-        );
-        setFiles(updatedFiles);
+  const handleAiModeChange = async (selectedFiles: IFile[], enable : boolean) => {
+    if(selectedFiles[0] == null){
+      if(enable){
+        await axiosInstance.put(`/api/files/root/enable_ai`)
+      }
+      else {
+        await axiosInstance.put(`/api/files/root/disable_ai`)
+      }
+      // handle the whole drive
+    }
+    else if(!selectedFiles[0].isDirectory) {
+      if(enable){
+        for(const file of selectedFiles){
+          const formData = new FormData();
+          const data = {
+            file_id : file.id,
+          }
+  
+          console.log("Decrypting file...")
+          const file_data = await handleDecryption(file);
+          console.log("File decrypted")
+  
+          console.log(`File type: ${getMimeType(file.name)}`)
+          formData.append('file', new Blob([file_data], { type: getMimeType(file.name) }) , file.name);
+          formData.append('signed_request', JSON.stringify({ data, public_key : uint8ArrayToHex(user.publicKey) , signature : await generateSignature(user.privateKey, JSON.stringify(data)) }))
+          console.log("Signed request")
+          console.log("Processing file...")
+          
+          await aiNodeInstance.post('/ingest',formData,
+            {
+              headers: {
+                'Content-Type': 'multipart/form-data',  // Set content type to multipart/form-data
+              }
+            },
+          )
+          console.log("Processed file")
+        }
+        console.log("Notifying backend")
+        await axiosInstance.patch(`/api/files/toggle`, {
+          file_ids : selectedFiles.map(f => f.id)
+        })
+        console.log("Notified backend")
+      }
+
+    }
+    else {
+      //TODO: handle multiple folders
+    }
+    // const updatedFiles = files.map((file) =>
+    //   selectedFiles.map(f => f.id).includes(file.id)
+    //         ? { ...file, ai_enabled: !file.ai_enabled }
+    //         : file
+    //     );
+    //     setFiles(updatedFiles);
   };
 
   const handleDecryption = async (file: IFile): Promise<ArrayBuffer> => {
@@ -308,8 +356,6 @@ const Manager: React.FC = () => {
     if(!user.masterAesKey) return;
     fetchFolderFiles(currentFolder,user.masterAesKey);
   }
-
-  console.log("filepreviewpath    ", import.meta.env.VITE_API_FILES_BASE_URL)
   return (
     <FileManager 
       onNavChange={(navData : NavState) => {

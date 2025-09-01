@@ -10,7 +10,7 @@ import nacl.signing
 import nacl.encoding
 import logging
 import os
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Request
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 import tempfile
@@ -66,7 +66,7 @@ class ChatMessage(BaseModel):
 
 
 class FileIngestResponse(BaseModel):
-    file: str = Field(..., description="Uploaded filename (with extension)")
+    file_id: str = Field(..., description="File id")
     num_chunks: int = Field(..., ge=0, description="Number of chunks created from the file")
 
     model_config = {
@@ -363,7 +363,6 @@ class SignedRequest(GenericModel, Generic[T]):
     public_key: str = Field(..., pattern=r'^[0-9a-fA-F]{64}$', description="64-character hex public key")
     signature: str = Field(..., pattern=r'^[0-9a-fA-F]+$', description="Hex-encoded signature")
     data: T = Field(..., description="The signed data payload")
-
     @field_validator('public_key')
     @classmethod
     def validate_public_key_format(cls, v):
@@ -383,6 +382,7 @@ class SignedRequest(GenericModel, Generic[T]):
             return v
         except ValueError:
             raise ValueError('Invalid hex format for signature')
+    
 
 
 async def verify_user_signature(signed_request: SignedRequest[T]) -> T:
@@ -402,6 +402,7 @@ async def verify_user_signature(signed_request: SignedRequest[T]) -> T:
     # Get the components
     public_key_hex = signed_request.public_key
     signature_hex = signed_request.signature
+    print(signature_hex)
     data = signed_request.data
     
     # Convert hex to bytes
@@ -414,13 +415,15 @@ async def verify_user_signature(signed_request: SignedRequest[T]) -> T:
     try:
         verify_key = nacl.signing.VerifyKey(public_key_bytes)
         
+        # TODO: verify if user exists in the database
         # Verify the signature
         verify_key.verify(
             message_to_verify.encode('utf-8'),
             signature_bytes,
-            encoder=nacl.encoding.HexEncoder
         )
-        
+        response = await service.get('/api/is-user', { "public_key" : public_key_hex})
+        if response.json()["response"] != "yes":
+                raise HTTPException(status_code=404, detail="User not found")
         logger.info(f"Signature verification successful for public key: {public_key_hex[:16]}...")
         
         # Return the verified data
@@ -545,75 +548,85 @@ async def health_check():
     response_model=FileIngestResponse
 )
 async def ingest(
-    signed_request: SignedRequest[IngestRequest],
+    signed_request: str = Form(...),
     file: UploadFile = File(...),
     auth: ServerService = Depends(ensure_authenticated),
 ):
     """
     Ingest and AI-enable a file: chunk, embed, encrypt, and return encrypted data for storage.
     """
-    request = await verify_user_signature(signed_request)
+    request = None
     try:
-        # Validate file
-        if not file.filename:
-            raise HTTPException(status_code=400, detail="File must have a filename")
-        
-        file_id = request.file_id
-        # Read file content
-        file_bytes = await file.read()
-        filename = file.filename
+        # Manually parse the JSON string into a Python dictionary
+        signed_request = json.loads(signed_request)
+        print(signed_request)
+        # Validate the parsed data using Pydantic model
+        signed_request = SignedRequest[IngestRequest](**signed_request)
+        request = await verify_user_signature(signed_request)
 
-        # Process file using existing logic
-        processor = FileProcessor()
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1]) as tmp_file:
-            tmp_file.write(file_bytes)
-            temp_path = tmp_file.name
-
-        try:
-            # Chunk and extract content
-            processed_docs = processor.process(temp_path, original_filename=filename)
-            if not processed_docs:
-                raise HTTPException(status_code=400, detail="Unsupported or failed to process file type")
-
-        finally:
-            # Ensure temp file is cleaned up
-            try:
-                os.remove(temp_path)
-            except OSError as e:
-                logger.warning(f"Failed to remove temp file {temp_path}: {e}")
-
-        # Generate embeddings
-        embedder = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-        texts = [doc.page_content for doc in processed_docs]
-        embeddings = embedder.embed_documents(texts)
-
-        # Store in database
-        chunks = []
-        for doc, emb in zip(processed_docs, embeddings):
-            clean_chunk = doc.page_content.replace('\x00', '')
-            
-            chunk_obj = {
-                "chunk": encrypt_input(clean_chunk), 
-                "embedding": encrypt_input_bytes(np.array(emb, dtype=np.float32)), 
-            }
-            chunk_obj.update(doc.metadata)
-            chunks.append(chunk_obj)
-
-        # TODO: encrypt.
-
-        payload = {"chunks": chunks, "file_id" : file_id}
-        await service.post('/api/chunks/store', json=payload )
-        return {
-            "file": filename,
-            "num_chunks": len(chunks),
-            "status": "success"
-        }
-        
-    except HTTPException:
-        raise
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid request ")
     except Exception as e:
-        logger.error(f"Ingestion failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+        raise e
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="File must have a filename")
+    
+    file_id = request.file_id
+    # Read file content
+    file_bytes = await file.read()
+    filename = file.filename
+
+    # Process file using existing logic
+    processor = FileProcessor()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1]) as tmp_file:
+        tmp_file.write(file_bytes)
+        temp_path = tmp_file.name
+
+    try:
+        # Chunk and extract content
+        processed_docs = processor.process(temp_path, original_filename=filename)
+        if not processed_docs:
+            raise HTTPException(status_code=400, detail="Unsupported or failed to process file type")
+
+    finally:
+        # Ensure temp file is cleaned up
+        try:
+            os.remove(temp_path)
+        except OSError as e:
+            logger.warning(f"Failed to remove temp file {temp_path}: {e}")
+
+    # Generate embeddings
+    embedder = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    print("generated dawg")
+    texts = [doc.page_content for doc in processed_docs]
+    embeddings = embedder.embed_documents(texts)
+
+    # Store in database
+    chunks = []
+    for doc, emb in zip(processed_docs, embeddings):
+        clean_chunk = doc.page_content.replace('\x00', '')
+        
+        chunk_obj = {
+            "chunk": encrypt_input(clean_chunk), 
+            "embedding": encrypt_input_bytes(np.array(emb, dtype=np.float32)), 
+        }
+        chunk_obj.update(doc.metadata)
+        chunks.append(chunk_obj)
+
+
+
+    payload = {"chunks": chunks, "file_id" : file_id}
+    await service.post('/api/chunks/store', json=payload )
+    return {
+        "file": filename,
+        "num_chunks": len(chunks),
+        "status": "success"
+    }
+        
+    
+
+    
+    
 
 
 @app.post("/chat/start",response_model=SessionLoadResponse)

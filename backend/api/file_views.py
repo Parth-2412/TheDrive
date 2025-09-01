@@ -611,7 +611,7 @@ def delete_file(request, file_id):
     responses={204: None},
     tags=['Folders']
 )
-@api_view(['DELETE'])
+@api_view(['PUT'])
 def disable_folder_ai(request, folder_id):
     """Disable AI on all the files in the folder sub tree"""
     folder_record = get_object_or_404(Folder, id=folder_id, user=request.user)
@@ -692,27 +692,60 @@ def enable_folder_ai(request, folder_id):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+class ToggleFilesAISerializer(serializers.Serializer):
+    file_ids = serializers.ListField(
+        child=serializers.UUIDField(),  # Ensure that file_ids are integers
+        required=True
+    )
+
 @extend_schema(
-    operation_id='toggle_file_ai',
-    summary='Toggle AI on a file',
-    description='Toggle the AI-enabled state on a file',
+    operation_id='toggle_files_ai',
+    summary='Toggle AI on multiple files',
+    description='Toggle the AI-enabled state on multiple files',
+    request=ToggleFilesAISerializer,
     responses={204: None},
     tags=['Files']
 )
 @api_view(['PATCH'])
-def toggle_file_ai(request, file_id):
-    """Toggle AI on a file"""
-    file_record = get_object_or_404(File, id=file_id, user=request.user)
+def toggle_files_ai(request):
+    """Toggle AI on multiple files"""
 
-    try:
-        # Toggle the ai_enabled field
-        file_record.ai_enabled = not file_record.ai_enabled
-        file_record.save()
+    # Deserialize and validate the request data
+    serializer = ToggleFilesAISerializer(data=request.data)
 
-        return Response(status=status.HTTP_204_NO_CONTENT)
+    if serializer.is_valid():
+        file_ids = serializer.validated_data['file_ids']
 
-    except Exception as e:
-        return Response(
-            {'error': f'Failed to toggle AI on file: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        try:
+            # Use a single query to toggle the ai_enabled field for the files that belong to the current user
+            files_to_update = File.objects.filter(id__in=file_ids, user=request.user)
+
+            if not files_to_update.exists():
+                return Response(
+                    {'error': 'No files found or you do not have permission to modify these files'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Perform the update with one SQL query
+            updated_count = files_to_update.update(
+                ai_enabled=~File.objects.filter(id__in=file_ids, user=request.user).values_list('ai_enabled', flat=True).first()
+            )
+
+            if updated_count > 0:
+                return Response(status=status.HTTP_204_NO_CONTENT)
+
+            return Response(
+                {'error': 'No files were updated'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to toggle AI on files: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    # If serializer is not valid, return validation error response
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+

@@ -12,5 +12,14 @@ const axiosInstance = axios.create({
   },
 });
 
+export const aiNodeInstance = axios.create({
+  baseURL: import.meta.env.VITE_AI_NODE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+
+
 
 export default axiosInstance;

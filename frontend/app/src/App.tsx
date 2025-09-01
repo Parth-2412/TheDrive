@@ -4,13 +4,13 @@ import { IonReactRouter } from '@ionic/react-router';
 import { Route, Redirect } from 'react-router-dom'; // Using React Router v5
 import { useRecoilState } from 'recoil';
 import { userState } from './state/user';
-import { importAesKey } from './services/crypto.service';
+import { generateSignature, importAesKey } from './services/crypto.service';
 import { stringToUint8Array, uint8ArrayToString } from './services/helpers.service';
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 import { login_with_keys } from './services/auth.service';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import axiosInstance from './services/api.service';
+import axiosInstance, { aiNodeInstance } from './services/api.service';
 import './global.css'
 import ChatApp from './components/Chat';
 
@@ -89,6 +89,35 @@ const App: React.FC = () => {
         return Promise.reject(error);
       }
     );
+    aiNodeInstance.interceptors.request.use(
+    async (config) => {
+        if (config.headers["Content-Type"] != "application/json"){
+          return config;
+        }
+        // Get your public key, can be from state, context, or environment
+        const publicKey = user.publicKey; // Replace with actual public key
+
+        // Assuming you already have data being sent in the request body
+        const requestData = config.data || {}; // Fallback to an empty object if no data
+
+        // Generate the signature based on the public key and the data
+        const signature = await generateSignature(publicKey, requestData);
+
+        // Modify the request data by adding public_key, signature, and the actual data
+        config.data = {
+            public_key: publicKey,
+            signature: signature,
+            data: requestData,  // Actual request data
+        };
+
+        // Return the modified config
+        return config;
+    },
+    (error) => {
+        // Handle request error
+        return Promise.reject(error);
+    }
+);
 }, [user]);
   useEffect(() => {
     (async () => {

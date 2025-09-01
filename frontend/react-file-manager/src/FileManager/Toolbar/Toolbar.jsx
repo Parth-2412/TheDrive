@@ -9,7 +9,7 @@ import {
   MdOutlineFileUpload,
 } from "react-icons/md";
 import { BiRename } from "react-icons/bi";
-import { FaListUl, FaRegPaste } from "react-icons/fa6";
+import { FaBan, FaListUl, FaRegPaste, FaRobot } from "react-icons/fa6";
 import LayoutToggler from "./LayoutToggler";
 import { useFileNavigation } from "../../contexts/FileNavigationContext";
 import { useSelection } from "../../contexts/SelectionContext";
@@ -18,6 +18,8 @@ import { useLayout } from "../../contexts/LayoutContext";
 import { validateApiCallback } from "../../utils/validateApiCallback";
 import { useTranslation } from "../../contexts/TranslationProvider";
 import "./Toolbar.scss";
+import { getActions } from "../../utils/checkAllFilesSame";
+import { FaMinusCircle } from "react-icons/fa";
 
 const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions, onNavChange, onAiModeChange }) => {
   const [showToggleViewMenu, setShowToggleViewMenu] = useState(false);
@@ -27,7 +29,7 @@ const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions, onNavC
   const { activeLayout } = useLayout();
   const t = useTranslation();
   const { currentFolder, setCurrentPathFiles, currentPathFiles } = navData;
-  
+
   useEffect(() => {
       onNavChange(navData)
     }, [navData])
@@ -51,7 +53,20 @@ const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions, onNavC
       permission: !!clipBoard,
       onClick: handleFilePasting,
     },
+    {
+      icon: <TbSparkles size={18} />,
+      text: t("Enable AI mode"),
+      onClick: () => onAiModeChange([currentFolder],true),
+      permission: true
+    },
+    {
+      icon: <FaBan  size={18} />,
+      text: t("Disable AI mode"),
+      onClick: () => onAiModeChange([currentFolder],false),
+      permission: true
+    },
   ];
+
 
   const toolbarRightItems = [
     {
@@ -121,19 +136,19 @@ const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions, onNavC
                 <span>{t("download")}</span>
               </button>
             )}
-          {selectedFiles.length > 0 && (
-  <button
+
+          {getActions(selectedFiles).map((args) => (<button
     className="item-action file-action"
+    key={args[0]}
     onClick={() => {
-    onAiModeChange(selectedFiles);  // Pass the updated file to parent
+    onAiModeChange(selectedFiles,args[1]);  // Pass the updated file to parent
   }}
   >
-    <TbSparkles size={18} />
+    {args[1] ? <TbSparkles size={18} /> : <FaBan size={18} />}
     <span>
-      {currentPathFiles.find(f => f.path === selectedFiles[0].path)?.ai_enabled ? "Disable AI Mode" : "Enable AI Mode"}
+      {t(args[0])}
     </span>
-  </button>
-)}
+  </button>))}
 
             {permissions.delete && (
               <button

@@ -35,6 +35,11 @@
     "postcss-cli": "^11.0.1",
     "typescript": "^5.0.0"
   },
+  "dependencies": {
+    "@cyntler/react-doc-viewer": "^1.17.0",
+    "mammoth": "^1.10.0",
+    "pptx2html": "^0.3.4"
+  },
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
