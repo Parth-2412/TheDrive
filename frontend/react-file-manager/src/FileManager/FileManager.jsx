@@ -56,7 +56,9 @@ const FileManager = ({
   defaultNavExpanded = true,
   masterAesKey,
   onAiModeChange,
-  onDecryption
+  onDecryption,
+  searchValue,
+  setSearchValue
 }) => {
   const [isNavigationPaneOpen, setNavigationPaneOpen] = useState(defaultNavExpanded);
   const triggerAction = useTriggerAction();
@@ -90,6 +92,8 @@ const FileManager = ({
                     permissions={permissions}
                     onNavChange={onNavChange}
                     onAiModeChange={onAiModeChange}
+                    searchValue={searchValue}
+                    setSearchValue={setSearchValue}
                   />
                   <section
                     ref={containerRef}
@@ -128,6 +132,7 @@ const FileManager = ({
                         triggerAction={triggerAction}
                         permissions={permissions}
                         onAiModeChange={onAiModeChange}
+                        filteredFiles={files}
                       />
                     </div>
                   </section>
