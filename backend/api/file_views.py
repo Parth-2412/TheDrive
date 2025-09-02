@@ -651,7 +651,7 @@ def disable_folder_ai(request, folder_id):
             """
 
         with connection.cursor() as cursor:
-            cursor.execute(query, [folder_id, user_id] if folder_id is not None else [user_id])
+            cursor.execute(query, [folder_id, user_id, user_id, user_id] if folder_id is not None else [user_id])
         return Response(status=status.HTTP_204_NO_CONTENT)
     
     except Exception as e:
@@ -707,7 +707,7 @@ def enable_folder_ai(request, folder_id):
             """
 
         with connection.cursor() as cursor:
-            cursor.execute(query, [folder_id, user_id] if folder_id is not None else [user_id])
+            cursor.execute(query, [folder_id, user_id, user_id, user_id] if folder_id is not None else [user_id])
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     except Exception as e:
