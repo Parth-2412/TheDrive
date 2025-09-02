@@ -88,8 +88,8 @@ def get_chunks_for_folder(folder_id, user):
 
         sql_query = """
             SELECT dc.*
-            FROM api_document_chunk dc
-            INNER JOIN api_file f ON dc.file_id = f.id
+            FROM document_chunks dc
+            INNER JOIN files f ON dc.file_id = f.id
             WHERE f.user_id = %s AND f.ai_enabled = true; 
         """
         params = [user.id]
@@ -97,17 +97,22 @@ def get_chunks_for_folder(folder_id, user):
         sql_query = """
             WITH RECURSIVE folder_tree AS (
                 SELECT id, parent_id
-                FROM api_folder
+                FROM folders
                 WHERE id = %s AND user_id = %s
+                
                 UNION ALL
+                
                 SELECT f.id, f.parent_id
-                FROM api_folder f
+                FROM folders f
                 INNER JOIN folder_tree ft ON f.parent_id = ft.id
+                WHERE f.user_id = %s  -- Add user_id constraint in recursive part
             )
             SELECT dc.*
-            FROM api_document_chunk dc
-            INNER JOIN api_file f ON dc.file_id = f.id
-            WHERE f.folder_id IN (SELECT id FROM folder_tree) AND f.ai_enabled = true;
+            FROM document_chunks dc
+            INNER JOIN files f ON dc.file_id = f.id
+            WHERE f.folder_id IN (SELECT id FROM folder_tree) 
+            AND f.ai_enabled = true
+            AND f.user_id = %s;  -- Add user_id constraint for files
         """
         params = [folder_id, user.id]
 

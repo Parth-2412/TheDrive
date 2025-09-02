@@ -342,17 +342,18 @@ const Manager = ({
     else {
       if(enable){
         //TODO: handle multiple folders for enable
-
+        await Promise.all(selectedFiles.map(folder => axiosInstance.put(`/api/folders/${folder.id}/set_folder_ai/`, {
+          value: true,
+        })))
       }
       else {
-        await Promise.all(selectedFiles.map(folder => axiosInstance.patch(`/api/folders/${folder.id}/disable_ai/`, {
-          file_ids : selectedFiles.map(f => f.id),
+        await Promise.all(selectedFiles.map(folder => axiosInstance.put(`/api/folders/${folder.id}/set_folder_ai/`, {
           value: false,
         })))
       }
     }
     const updatedFiles = files.map((file) =>
-      selectedFiles.find(f => file.path.startsWith(f === null ? "/" : f.path))
+      selectedFiles.find(f => file.path.startsWith(f === null ? "/" : f.path) && !file.isDirectory)
             ? { ...file, ai_enabled: enable }
             : file
         );

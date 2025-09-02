@@ -303,20 +303,22 @@ def rename_folder(request, folder_id):
 def collect_files(folder_id):
     # Prepare the SQL query
     query = """
-    WITH RECURSIVE file_hierarchy AS (
-        -- Base case: Select files directly in the given folder
-        SELECT f.id, f.name, f.folder_id
+        WITH RECURSIVE folder_hierarchy AS (
+            -- Base case: Start with the given folder
+            SELECT id
+            FROM folders
+            WHERE id = %s
+            
+            UNION ALL
+            
+            -- Recursive case: Find all subfolders
+            SELECT f.id
+            FROM folders f
+            JOIN folder_hierarchy fh ON f.parent_id = fh.id
+        )
+        SELECT f.id, f.name
         FROM files f
-        WHERE f.folder_id = %s
-
-        UNION ALL
-
-        -- Recursive case: Select files in subfolders
-        SELECT f.id, f.name, f.folder_id
-        FROM files f
-        JOIN file_hierarchy fh ON fh.id = f.folder_id
-    )
-    SELECT id, name FROM file_hierarchy;
+        WHERE f.folder_id IN (SELECT id FROM folder_hierarchy);
     """
 
     # Execute the query with the given folder_id
@@ -603,116 +605,63 @@ def delete_file(request, file_id):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+class SetFolderAISerializer(serializers.Serializer):
+    value = serializers.BooleanField(required=True)
 
 @extend_schema(
-    operation_id='disable_folder_ai',
-    summary='Disable AI on a folder',
-    description='Disable AI on all the files in the folder sub tree',
-    responses={204: None},
-    tags=['Folders']
-)
-@api_view(['PUT'])
-def disable_folder_ai(request, folder_id):
-    """Disable AI on all the files in the folder sub tree"""
-    if folder_id != "root":
-        get_object_or_404(Folder, id=folder_id, user=request.user)
-    else:
-        folder_id = None
-
-    try:
-        # Recursive query to get all files in the folder and its subfolders
-        user_id = request.user.id
-
-        if folder_id is None:
-            query = """
-                UPDATE files
-                SET ai_enabled = false
-                WHERE user_id = %s;
-            """
-        else:
-            query = """
-                WITH RECURSIVE file_hierarchy AS (
-                    -- Base case: Select files directly in the given folder
-                    SELECT f.id
-                    FROM files f
-                    WHERE f.folder_id = %s AND f.user_id = %s
-
-                    UNION ALL
-
-                    -- Recursive case: Select files in subfolders
-                    SELECT f.id
-                    FROM files f
-                    JOIN file_hierarchy fh ON fh.id = f.folder_id
-                    WHERE f.user_id = %s
-                )
-                UPDATE files
-                SET ai_enabled = false
-                WHERE id IN (SELECT id FROM file_hierarchy) AND user_id = %s;
-            """
-
-        with connection.cursor() as cursor:
-            cursor.execute(query, [folder_id, user_id, user_id, user_id] if folder_id is not None else [user_id])
-        return Response(status=status.HTTP_204_NO_CONTENT)
-    
-    except Exception as e:
-        return Response(
-            {'error': f'Failed to disable AI: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-@extend_schema(
-    operation_id='enable_folder_ai',
+    operation_id='set_folder_ai',
     summary='Enable AI on a folder',
     description='Enable AI on all the files in the folder sub tree',
+    request=SetFolderAISerializer,
     responses={204: None},
     tags=['Folders']
 )
 @api_view(['PUT'])
-def enable_folder_ai(request, folder_id):
-    """Enable AI on all the files in the folder sub tree"""
+def set_folder_ai(request, folder_id):
+    """Set AI Mode on all the files in the folder sub tree"""
     if folder_id != "root":
         get_object_or_404(Folder, id=folder_id, user=request.user)
     else:
         folder_id = None
-
+    enable = bool(request.data.get('value', False))
     try:
         # Recursive query to get all files in the folder and its subfolders
         user_id = request.user.id
-
+        print(folder_id,user_id)
         if folder_id is None:
             query = """
                 UPDATE files
-                SET ai_enabled = false
+                SET ai_enabled = %s
                 WHERE user_id = %s;
             """
         else:
             query = """
-                WITH RECURSIVE file_hierarchy AS (
-                    -- Base case: Select files directly in the given folder
-                    SELECT f.id
-                    FROM files f
-                    WHERE f.folder_id = %s AND f.user_id = %s
-
-                    UNION ALL
-
-                    -- Recursive case: Select files in subfolders
-                    SELECT f.id
-                    FROM files f
-                    JOIN file_hierarchy fh ON fh.id = f.folder_id
-                    WHERE f.user_id = %s
+                WITH RECURSIVE folder_hierarchy AS (
+                -- Base case: Start with the given folder
+                SELECT id
+                FROM folders
+                WHERE id = %s AND user_id = %s
+                
+                UNION ALL
+                
+                -- Recursive case: Find all subfolders
+                SELECT f.id
+                FROM folders f
+                JOIN folder_hierarchy fh ON f.parent_id = fh.id
+                WHERE f.user_id = %s
                 )
                 UPDATE files
-                SET ai_enabled = false
-                WHERE id IN (SELECT id FROM file_hierarchy) AND user_id = %s;
+                SET ai_enabled = %s
+                WHERE folder_id IN (SELECT id FROM folder_hierarchy) AND user_id = %s;
             """
-
+        new_val =  enable
         with connection.cursor() as cursor:
-            cursor.execute(query, [folder_id, user_id, user_id, user_id] if folder_id is not None else [user_id])
+            cursor.execute(query, [folder_id, user_id, user_id, new_val, user_id] if folder_id is not None else [new_val,user_id])
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     except Exception as e:
         return Response(
-            {'error': f'Failed to enable AI: {str(e)}'},
+            {'error': f'Failed to set AI Mode: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 

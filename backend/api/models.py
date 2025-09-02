@@ -227,7 +227,7 @@ class DocumentChunk(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
-        db_table = 'document_chunk'
+        db_table = 'document_chunks'
         indexes = []
 
 class AuthNonce(models.Model):

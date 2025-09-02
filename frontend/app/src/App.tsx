@@ -165,7 +165,7 @@ const App: React.FC = () => {
                 <Route exact path="/">
                   <ChatApp />
                 </Route>
-                {/* <Route render={() => <Redirect to='/' />} /> */}
+                <Route render={() => <Redirect to='/' />} />
               </>
 
             )

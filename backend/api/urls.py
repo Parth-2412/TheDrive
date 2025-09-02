@@ -18,8 +18,8 @@ urlpatterns = [
     path('folders/<folder_id>/', file_views.list_folder_contents, name='list_folder_contents'),
     path('folders/<uuid:folder_id>/rename/', file_views.rename_folder, name='rename_folder'),
     path('folders/<uuid:folder_id>/delete/', file_views.delete_folder, name='delete_folder'),
-    path('folders/<folder_id>/disable_ai/', file_views.disable_folder_ai, name='disable_folder_ai'),
-    path('folders/<folder_id>/enable_ai/', file_views.enable_folder_ai, name='enable_folder_ai'),
+
+    path('folders/<folder_id>/set_folder_ai/', file_views.set_folder_ai, name='set_folder_ai'),
     
     # File endpoints
     path('files/', file_views.upload_file, name='upload_file'),
