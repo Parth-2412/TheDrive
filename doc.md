@@ -2,52 +2,39 @@
 
 ## Overview
 
-This system provides end-to-end encrypted cloud storage with AI-powered document search and chat capabilities. The architecture combines the security of self-sovereign identity (seed phrases) with the convenience of decentralized AI processing nodes.
+This system provides end-to-end encrypted cloud storage with AI-powered document search and chat capabilities. The architecture combines the security of self-sovereign identity that essentialy provides the individual full control over their digital data with the convenience of decentralized AI processing nodes.
 
 ## Core Architecture Principles
 
-- **Zero-Knowledge Storage**: Server never sees plaintext data or encryption keys
+- **Zero-Knowledge Storage**: Server is never able to see the stored files or the private key ensuring confidentiality
 - **Self-Sovereign Identity**: Users identified by cryptographic keys derived from seed phrases
-- **Decentralized AI**: Multiple AI nodes compete to provide services, users choose their trusted provider
-- **User-Controlled Privacy**: Users can instantly revoke AI access to their data
-- **Hierarchical Encryption**: Folder-based key derivation for granular access control
+- **Decentralized AI**: Multiple AI nodes compete to provide services, users choose their trusted provider . This ensures the user that we dont breach the data by providing our own AI node . Hence giving the user full control over choices and maintaining the trust.
+- **User-Controlled Privacy**: Users can instantly revoke the access from AI , if they feel that they no longer need the use of the service or not secure.
+- **Hierarchical Encryption**: Access of only the necessary file is given to the external agents(AI) hence ensuring maximum security . We call this granular access control.
 
 ## User Identity & Authentication
 
 ### Seed Phrase Based Identity
-```
 User Registration/Login:
-1. Generate/Enter 12-word BIP39 seed phrase (which the user stores for recovery)
+1. Generate/Enter 12-word BIP39 seed phrase which is stored by the user in case of data loss
 2. Derive assymetric key pair from seed
 3. Public key becomes user identifier
-4. Private key stays client-side, never transmitted
+4. Private key is always with the user and never transmitted to anyone 
 5. User can login from any device with same seed phrase
 6. Once registered, the key pair is stored on the client's device and whenever the client opens our app, the key pair is detected and a signed nonce (nonce is provided by the server upon login request) is sent to the server for login, which on successful login returns a JWT token for further authentication
 7. Whenever a user logsout, the JWT token and stored key pair is deleted
-```
-
-### Key Derivation Hierarchy
-```
-Seed Phrase (12 words)
-├── Authentication Key: HKDF(seed, "auth") → Assymetric key pair
-├── Drive Master Key: HKDF(seed, "drive") → Symmetric key
-├── Folder Keys: Encrypt(folder_key, drive_master_key)
-└── File Keys: Encrypt(file_key, drive_master_key)
-```
-
 ## Storage Architecture
 
 ### Encryption Model
-```
+
 All files encrypted with a unique key and is stored on the server by encrypting it with the user's master key (or the master drive key)
-```
 
 ### Data Storage Components
 
 1. **MinIO Object Storage**
-   - Stores encrypted files and chunks
+   - Stores encrypted files and the chunks generated
    - S3-compatible API
-   - Hierarchical path structure: `user_{id}/folder_{id}/file_{name}`
+   - Follows a hierarchy when storing which is as follows --> user_id/folder_id/file_name
 
 2. **PostgreSQL Database**
    - File/folder metadata and hierarchy
@@ -57,148 +44,66 @@ All files encrypted with a unique key and is stored on the server by encrypting 
 ## AI Node Architecture
 
 ### AI Node Model
-```
 AI Nodes are autonomous entities similar to blockchain nodes:
-├── Each node has its own RSA key pair (generated at deployment)
-├── Nodes register with the platform for authorization
-├── Users choose their trusted AI node
-├── Nodes compete on performance, reliability, and trust
-├── Open-source implementation allows anyone to run a node
-```
-
+- Each node has its own RSA key pair which is generated at the time of deployment
+- Nodes register with the platform and undergo authorisation to proceed further
+- Users are given full freedom to choose their own AI node so as to maintain trust between user and the application
+- User is presented with different options of nodes on the basis of their performance , latency and other external factors 
+- Open-Source implementation allows any user to run a AI node and hence variety of options would be there , not limiting the user with choices
 ### AI Node Authorization Flow
-```
 1. Node Deployment:
-   ├── Generate assymetric key pair at build time
-   ├── Register with platform (submit public key + endpoint)
+   - Generate assymetric key pair at build time
+   - Register with platform (submit public key + endpoint)
    
 2. Platform Authorization:
-   ├── Platform owners verify node legitimacy
-   ├── Add node to authorized list
-   ├── Users can see available nodes
+   - Platform owners verify whether the nodes are legitimate or not
+   ─ Once authorized , the nodes are added to the list of available nodes
+   ─ Users can see available nodes after they are added to the list
    
 3. User Selection:
-   ├── User browses available AI nodes
-   ├── Selects trusted node based on reputation/features
-   ├── All AI operations routed to selected node
-```
-
+   - As discussed before , user is allowed to choose the AI nodes available
+   - User selects the nodes on the basis of features , latency , performance and other different factors
+   - All AI operations will now be routed to the selected AI node
 ## AI Processing Workflow
 
 ### File AI-Enablement Process
-```
-1. User marks file/folder as "AI-enabled"
-2. Client requests encrypted file from server
-3. Client decrypts file locally using keys
+1. Files are marked as AI enabled , thus conveying which files are shared with AI hence actively telling the user about it
+2. Client requests the encrypted file from server
+3. After the files are retrieved , the user decrytps the file on his machine locally
 4. Client sends plaintext to chosen AI node over TLS encryption
 5. AI node processes file:
-   ├── Chunks document (512-1024 token chunks)
-   ├── Generates embeddings using local model
-   ├── Encrypts chunks and embeddings with a key generated by the AI node specifically for the particular user (i.e all chunks and embeddings of a particular user are encrypted with a unique key, different for each user)
-   ├── Sends encrypted data back to server for storage
+   - Chunks document (512-1024 token chunks)
+   - Generates embeddings using local model
+   - Encrypts chunks and embeddings with a key generated by the AI node specifically for the particular user (i.e all chunks and embeddings of a particular user are encrypted with a unique key, different for each user)
+   - Sends encrypted data back to server for storage
 6. Server stores encrypted chunks/embeddings
 7. Client receives confirmation
-```
 
 ### Security Measures for AI Processing
-```
-Client → AI Node Communication:
-├── TLS 1.3 for transport security
-├── Prevents man-in-the-middle attacks
-├── Ensures only intended AI node can access content
-```
-
+Client to AI Node Communication:
+- TLS 1.3 is used for transport security
+─ Prevents man-in-the-middle attacks by ensuring no eavesdropping takes place
+- Ensures only intended AI node can access content by firstly removing all the unauthorised 
 ## Chat Session Architecture
 
 ### Session-Based AI Interaction
-```
 Chat Session Lifecycle:
-1. User initiates chat session
-2. User selects files/folders to include
+1. User initiates the chat session
+2. User selects files/folders to get info onto
 3. Server sends encrypted chunks to AI node
 4. AI node decrypts and loads into session memory
 5. Real-time chat via WebSocket connection
-6. Session end → AI node purges all data
-```
-
+6. Session end and then AI node purges all data
 ### WebSocket Communication Flow
-```
 User ←→ Server ←→ AI Node
 
 Direct WebSocket between User and AI Node:
-├── Session establishment through server
-├── Direct WebSocket connection for low latency
-├── Server provides encrypted chunks at session start
-├── Queries and responses flow directly
-├── Session termination triggers data purge
-```
+- Session establishment through server
+- Direct WebSocket connection for low latency
+- Server provides encrypted chunks at session start
+- Queries and responses flow directly
+- Session termination triggers data purge
 
-## Data Flow Diagrams
-
-### File Upload & AI Enablement
-```
-┌─────────────┐    ┌──────────────┐    ┌─────────────┐
-│User Client  │    │   Server     │    │  AI Node    │
-└─────────────┘    └──────────────┘    └─────────────┘
-        │                   │                   │
-        │ 1. Upload file    │                   │
-        │ (encrypted)       │                   │
-        ├──────────────────►│                   │
-        │                   │                   │
-        │ 2. Mark AI-enabled│                   │
-        ├──────────────────►│                   │
-        │                   │                   │
-        │ 3. Request file   │                   │
-        │ for AI processing │                   │
-        ├──────────────────►│                   │
-        │                   │                   │
-        │ 4. Encrypted file │                   │
-        │◄──────────────────┤                   │
-        │                   │                   │
-        │ 5. Decrypt locally│                   │
-        │                   │                   │
-        │ 6. Send plaintext │                   │
-        │ (TLS + RSA encrypted)                 │
-        ├──────────────────────────────────────►│
-        │                   │ 7. Process file   │
-        │                   │ (chunk + embed)   │
-        │                   │                   │
-        │                   │ 8. Encrypted      │
-        │                   │ chunks/embeddings │
-        │                   │◄──────────────────┤
-        │                   │                   │
-        │ 9. Processing     │                   │
-        │ complete          │                   │
-        │◄──────────────────┤                   │
-```
-
-### Chat Session Flow
-```
-┌─────────────┐    ┌──────────────┐    ┌─────────────┐
-│User Client  │    │   Server     │    │  AI Node    │
-└─────────────┘    └──────────────┘    └─────────────┘
-        │                   │                   │
-        │ 1. Start chat     │                   │
-        │ (select files)    │                   │
-        ├──────────────────►│                   │
-        │                   │ 2. Send encrypted │
-        │                   │ chunks to AI      │
-        │                   ├──────────────────►│
-        │                   │                   │
-        │                   │ 3. Decrypt &      │
-        │                   │ load in memory    │
-        │                   │                   │
-        │ 4. WebSocket      │                   │
-        │ connection        │                   │
-        ├───────────────────┼──────────────────►│
-        │                   │                   │
-        │ 5. Chat queries   │                   │
-        │◄──────────────────┼──────────────────►│
-        │                   │                   │
-        │ 6. End session    │                   │
-        ├──────────────────►│ 7. Purge AI data  │
-        │                   ├──────────────────►│
-```
 
 ## Security Model
 
