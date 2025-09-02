@@ -1,7 +1,7 @@
 @import "../../styles/variables";
 
 .fm-modal-backdrop {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
@@ -10,8 +10,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 10000; /* Higher than chat z-index */
   animation: fadeIn 0.3s ease-out;
+  padding: 1rem;
+  box-sizing: border-box;
+  
+  /* On mobile, adjust backdrop to leave space for chat */
+  @media (max-width: 767px) {
+    bottom: var(--chat-height, 42vh); /* Leave space for chat */
+    background: rgba(0, 0, 0, 0.3); /* Lighter backdrop on mobile */
+    align-items: flex-start;
+    padding-top: 2rem;
+  }
 }
 
 .fm-modal-content {
@@ -19,14 +29,37 @@
   border: 1px solid #c6c6c6;
   border-radius: 5px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.253);
-  max-height: 95vh;
-  max-width: 95vw;
-  min-height: 60vh;
-  min-width: 70vw;
   overflow: hidden;
+  color: black;
   display: flex;
   flex-direction: column;
   animation: slideIn 0.3s ease-out;
+  margin: auto;
+  
+  /* Responsive sizing for different screen sizes */
+  max-height: 90vh;
+  max-width: 90vw;
+  min-height: 200px;
+  min-width: 300px;
+  
+  /* Desktop: Full size modal */
+  @media (min-width: 768px) {
+    max-height: 90vh;
+    max-width: 80vw;
+    width: 80vw;
+    height: 80vh;
+  }
+  
+  /* Mobile: Leave space for chat */
+  @media (max-width: 767px) {
+    max-height: 50vh; /* Leave space for chat below */
+    max-width: 95vw;
+    width: 95vw;
+    height: 50vh;
+    margin-top: 0; /* Align to top */
+    margin-bottom: auto;
+    align-self: flex-start;
+  }
 }
 
 .fm-modal-header {
