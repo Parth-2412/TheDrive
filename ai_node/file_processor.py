@@ -32,7 +32,7 @@ class FileProcessor:
             '.md', '.markdown', '.js', '.ts', '.jsx', '.tsx', '.css', '.scss',
             '.sass', '.py', '.java', '.cpp', '.c', '.h', '.hpp', '.php', '.rb',
             '.go', '.rs', '.sql', '.log', '.conf', '.config', '.ini', '.env',
-            '.gitignore', '.dockerfile', '.makefile', 'doc'
+            '.gitignore', '.dockerfile', '.makefile'
         ]
         
         self.loader_map = {
