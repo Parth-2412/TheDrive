@@ -226,7 +226,7 @@ const Chat = () => {
         
         <div className="context-container">
           <span className='context-row'>Context: </span>
-          <span className="context-value">{currentContext?.path}</span>
+          <span className="context-value">{currentContext? (currentContext.path || "/") : "Send a message"}</span>
           {sessionLoading && <IonSpinner name="crescent" />}
         </div>
       </IonHeader>
@@ -241,7 +241,7 @@ const Chat = () => {
           disabled={!sessionId || sessionLoading}
           placeholder={
             sessionLoading ? "Initializing..." : 
-            "Start chatting!"
+            "Type here..."
           }
         />
       </IonContent>

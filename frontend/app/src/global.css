@@ -1,6 +1,5 @@
 
 .ion-page {
-  height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -21,4 +20,10 @@
   background-color: rgb(244, 244, 244);
   justify-content: center !important;
   align-items: center;
+}
+
+.ant-pro-chat-list-item-message-content * {
+  word-break: normal;
+  word-wrap: normal;
+  overflow-wrap: normal;
 }

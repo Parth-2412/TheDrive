@@ -38,7 +38,7 @@ const FileList = ({
     clickPosition,
     isSelectionCtx,
   } = useFileList(onRefresh, enableFilePreview, triggerAction, permissions, onFileOpen, onAiModeChange);
-  console.log(filteredFiles);
+
   const contextMenuRef = useDetectOutsideClick(() => setVisible(false));
 
   const handleSort = (key) => {

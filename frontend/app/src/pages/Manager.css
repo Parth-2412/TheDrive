@@ -76,3 +76,8 @@
         width: calc(100% - max(var(--side-min-width), var(--side-max-width))) !important;
     }
 }
+
+
+.ant-pro-chat-chat-list-container {
+    height: 100% !important;
+}
