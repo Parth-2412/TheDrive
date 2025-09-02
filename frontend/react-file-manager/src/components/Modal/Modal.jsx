@@ -1,5 +1,5 @@
 import { MdClose } from "react-icons/md";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useTranslation } from "../../contexts/TranslationProvider";
 import "./Modal.scss";
 
@@ -11,8 +11,8 @@ const Modal = ({
   dialogWidth = "25%",
   contentClassName = "",
   closeButton = true,
+  onModalClose = () => {},
 }) => {
-  const modalRef = useRef(null);
   const t = useTranslation();
 
   const handleKeyDown = (e) => {
@@ -21,34 +21,46 @@ const Modal = ({
     }
   };
 
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) {
+      setShow(false);
+    }
+  };
+
   useEffect(() => {
     if (show) {
-      modalRef.current.showModal();
-    } else {
-      modalRef.current.close();
+      document.addEventListener("keydown", handleKeyDown);
     }
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [show]);
 
+  if (!show) return null;
+
   return (
-    <dialog
-      ref={modalRef}
-      className={`fm-modal dialog`}
-      style={{ width: dialogWidth }}
-      onKeyDown={handleKeyDown}
-    >
-      <div className="fm-modal-header">
-        <span className="fm-modal-heading">{heading}</span>
-        {closeButton && (
-          <MdClose
-            size={18}
-            onClick={() => setShow(false)}
-            className="close-icon"
-            title={t("close")}
-          />
-        )}
+    <div className="fm-modal-backdrop" onClick={handleBackdropClick}>
+      <div
+        className={`fm-modal-content ${contentClassName}`}
+        style={{ width: dialogWidth }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="fm-modal-header">
+          <span className="fm-modal-heading">{heading}</span>
+          {closeButton && (
+            <MdClose
+              size={18}
+              onClick={() => {setShow(false); onModalClose();}}
+              className="close-icon"
+              title={t("close")}
+            />
+          )}
+        </div>
+        <div className="fm-modal-body">
+          {children}
+        </div>
       </div>
-      {children}
-    </dialog>
+    </div>
   );
 };
 

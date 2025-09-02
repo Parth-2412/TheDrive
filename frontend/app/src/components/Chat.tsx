@@ -41,33 +41,23 @@ const Chat = ({currentContext, currentFolderPath, onSwitchToCurrentContext}: {
           <IonTitle>AI Assistant</IonTitle>
           <IonButtons slot="end">
             <IonButton shape='round' fill="clear">
+            {currentContext !== currentFolderPath ? <IonButton 
+              className="context-switch-button" 
+              size="small" 
+              fill="clear"
+              
+              onClick={onSwitchToCurrentContext}
+            >
+              Switch to Current
+            </IonButton> : ''}
               <IonIcon icon={ellipsisVerticalOutline} />
             </IonButton>
           </IonButtons>
         </IonToolbar>
         
         <div className="context-container">
-          <div className="context-row">
-            <IonLabel className="context-label">
-              Current Folder:
-            </IonLabel>
-            <span className="context-value">{currentFolderPath}</span>
-          </div>
-          
-          <div className="context-row">
-            <IonLabel className="context-label">
-              AI Context:
-            </IonLabel>
-            <span className="context-value">{currentContext}</span>
-            {currentContext !== currentFolderPath ? <IonButton 
-              className="context-switch-button" 
-              size="small" 
-              fill="outline"
-              onClick={onSwitchToCurrentContext}
-            >
-              Switch to Current
-            </IonButton> : ''}
-          </div>
+          <span className='context-row'>Context: </span>
+          <span className="context-value">{currentContext}</span>
         </div>
       </IonHeader>
       
@@ -148,6 +138,20 @@ const ChatApp: React.FC = () => {
     }
   };
 
+  const handleFileOpen = (file: any) => {
+   if (!file.isDirectory) { 
+      if (file.ai_enabled){
+    setCurrentContext(file.path);
+    }
+    else {
+      setCurrentContext("This file is not AI-enabled.");
+    }}
+  
+}
+  const handleOnModalClose = () => {
+    setCurrentContext(currentFolderPath);
+  }
+
   return (
     <>
       {!isDesktop && isChatOpen &&  <style>
@@ -163,6 +167,8 @@ const ChatApp: React.FC = () => {
         <Manager 
           currentFolderPath={currentContext} 
           onFolderChange={handleFolderChange}
+          onFileOpen={handleFileOpen}
+          onModalClose={handleOnModalClose}
         />
         {isDesktop ? (<IonMenu type="overlay" side='end'>
             <div id="main" className="main-content">
@@ -188,10 +194,6 @@ const ChatApp: React.FC = () => {
                 </div>
                 
                 <div className="context-container-mobile">
-                  <div className="context-row-mobile">
-                    <span className="context-label-mobile">Folder:</span>
-                    <span className="context-value-mobile">{currentFolderPath}</span>
-                  </div>
                   <div className="context-row-mobile">
                     <span className="context-label-mobile">Context:</span>
                     <span className="context-value-mobile">{currentContext}</span>

@@ -22,7 +22,8 @@ const Actions = ({
   masterAesKey,
   onFileUpload,
   onDownload,
-  onDecryption
+  onDecryption,
+  onModalClose
 }) => {
   const [activeAction, setActiveAction] = useState(null);
   const { selectedFiles } = useSelection();
@@ -80,10 +81,12 @@ const Actions = ({
   if (activeAction) {
     return (
       <Modal
+      
         heading={activeAction.title}
         show={triggerAction.isActive}
         setShow={triggerAction.close}
         dialogWidth={activeAction.width}
+        onModalClose={onModalClose}
       >
         {activeAction?.component}
       </Modal>

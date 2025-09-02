@@ -71,10 +71,14 @@ function removeDuplicates(arr : (IFile|IFolder)[]) {
 
 const Manager = ({
   currentFolderPath, 
-  onFolderChange
+  onFolderChange,
+  onFileOpen,
+  onModalClose = () => {},
 }: {
   currentFolderPath: string;
   onFolderChange?: (folder: IFolder) => void;
+  onFileOpen?: (file: any) => void;
+  onModalClose?: () => void;
 }) => {
   const [files, setFiles] = useState<(IFile|IFolder)[]>([]);
   const [user,_] = useRecoilState<User>(userState as RecoilState<User>)
@@ -281,7 +285,11 @@ const Manager = ({
       present(showError());
     }
   }
-
+  const handleRefresh = async () => {
+    setFiles([]);
+    if(!user.masterAesKey) return;
+    fetchFolderFiles(currentFolder,user.masterAesKey);
+  }
   const handleAiModeChange = async (selectedFiles: IFile[], enable : boolean) => {
     if(selectedFiles[0] == null){
       if(enable){
@@ -295,6 +303,7 @@ const Manager = ({
     }
     else if(!selectedFiles[0].isDirectory) {
       if(enable){
+        try{
         console.log("Notifying backend")
         await axiosInstance.patch(`/api/files/toggle/`, {
           file_ids : selectedFiles.map(f => f.id),
@@ -326,8 +335,13 @@ const Manager = ({
           )
           console.log("Processed file")
         }
+      }
+      catch(error){
+        console.error(error);
+        present(showError()); 
         
       }
+    }
       else {
         
         console.log("Notifying backend")
@@ -341,22 +355,15 @@ const Manager = ({
     }
     else {
       if(enable){
-        //TODO: handle multiple folders for enable
-
+        // Handle enabling AI for folders - enable for all files in the folder
+        await Promise.all(selectedFiles.map(folder => axiosInstance.put(`/api/folders/${folder.id}/enable_ai/`)))
       }
       else {
-        await Promise.all(selectedFiles.map(folder => axiosInstance.patch(`/api/folders/${folder.id}/disable_ai/`, {
-          file_ids : selectedFiles.map(f => f.id),
-          value: false,
-        })))
+        // Handle disabling AI for folders - disable for all files in the folder
+        await Promise.all(selectedFiles.map(folder => axiosInstance.put(`/api/folders/${folder.id}/disable_ai/`)))
       }
     }
-    const updatedFiles = files.map((file) =>
-      selectedFiles.find(f => file.path.startsWith(f === null ? "/" : f.path))
-            ? { ...file, ai_enabled: enable }
-            : file
-        );
-    setFiles(updatedFiles);
+    await handleRefresh();
   };
 
   const handleDecryption = async (file: IFile): Promise<ArrayBuffer> => {
@@ -403,11 +410,7 @@ const Manager = ({
       }
     })
   }
-  const handleRefresh = async () => {
-    setFiles([]);
-    if(!user.masterAesKey) return;
-    fetchFolderFiles(currentFolder,user.masterAesKey);
-  }
+  
   const handleFolderChange = () => {
     // if(folder && folder.id != currentFolder.id){
       setSearchQuery('');
@@ -417,6 +420,7 @@ const Manager = ({
 
         <FileManager
           onNavChange={(navData : NavState) => {
+            console.log(navData)
             if(navData.currentFolder == null ){
               if(currentFolder.id != 'root'){
                 setNavState({...navState, currentFolder : ROOT_FOLDER})
@@ -443,10 +447,11 @@ const Manager = ({
           onDecryption={handleDecryption}
           height="100vh"
           onRefresh={handleRefresh}
-          onFileOpen={console.log}
+          onFileOpen={onFileOpen}
           onFolderChange={handleFolderChange}
           searchValue={searchQuery}
           setSearchValue={setSearchQuery}
+          onModalClose={onModalClose}
         />
       
   );
