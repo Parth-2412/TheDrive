@@ -71,7 +71,7 @@ const useChatSession = () => {
         files: [],
         folder_id : entity.id,
       } : {
-        files : [entity.id],
+        files : [{id: entity.id, name: entity.name}],
         folder_id : "",
       }
       const response = await aiNodeInstance.post<SessionResponse>('/chat/start',payload);

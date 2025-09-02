@@ -23,7 +23,7 @@
 }
 
 .ant-pro-chat-list-item-message-content * {
-  word-break: normal;
-  word-wrap: normal;
-  overflow-wrap: normal;
+  word-break: normal !important;
+  word-wrap: normal !important;
+  overflow-wrap: normal !important;
 }

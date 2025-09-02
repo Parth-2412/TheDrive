@@ -477,3 +477,7 @@
 .ant-pro-chat-message-content {
     width: 100% !important;
 }
+
+.ant-pro-chat-message-content {
+    flex-direction: column !important;
+}

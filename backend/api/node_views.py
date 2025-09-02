@@ -166,7 +166,7 @@ def get_chunks_files(request):
     if serializer.is_valid():
         user = get_user_for_ai_node(serializer.validated_data['public_key'], AINode.objects.filter(public_key=request.user).first())
         file_ids = serializer.validated_data['files']
-        valid_file_ids = File.objects.filter(user=user, file_id__in=file_ids).values_list('file_id', flat=True)
+        valid_file_ids = File.objects.filter(user=user, id__in=file_ids).values_list('id', flat=True)
         if len(valid_file_ids) < len(file_ids):
             return Response({"error" : ""})
         chunks = DocumentChunk.objects.filter(file_id__in=valid_file_ids)
