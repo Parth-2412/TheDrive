@@ -1,6 +1,6 @@
 import FileManager from "../../../react-file-manager/src/FileManager";
 import "../../../react-file-manager/dist/style.css";
-import { useCallback, useEffect,  useState } from "react";
+import { useCallback, useEffect,  useMemo,  useState } from "react";
 import './Manager.css';
 import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
 import { generateSHA256Hash, generateSignature, getFileSHA256Hash, importAesKey, uint8ArrayToHex } from "../services/crypto.service";
@@ -69,25 +69,56 @@ function removeDuplicates(arr : (IFile|IFolder)[]) {
     });
 }
 
-const Manager: React.FC = () => {
+const Manager = ({
+  currentFolderPath, 
+  onFolderChange
+}: {
+  currentFolderPath: string;
+  onFolderChange?: (folder: IFolder) => void;
+}) => {
   const [files, setFiles] = useState<(IFile|IFolder)[]>([]);
   const [user,_] = useRecoilState<User>(userState as RecoilState<User>)
   const [navState, setNavState] = useState<NavState>({ currentFolder : ROOT_FOLDER });
   const { currentFolder } = navState;
+  const [searchQuery, setSearchQuery] = useState('');
   const [present] = useIonToast();
+  // const [filteredFiles, setFilteredFiles] = useState<(IFile|IFolder)[]>();
+
+  // useEffect(() => {
+  //   const filtered = files.filter(file => 
+  //     file.name.toLowerCase().includes(searchQuery.toLowerCase())
+  //   );
+  //   setFilteredFiles(filtered);
+  // }, [files, searchQuery]);
+  const filteredFiles = useMemo(
+  () => files.filter(file =>
+    file.name.toLowerCase().includes(searchQuery.toLowerCase())
+  ),
+  [files, searchQuery]
+);
+
+  // const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  //   setSearchQuery(event.target.value);
+
+  //   const filteredFiles = files.filter(file => 
+  //     file.name.toLowerCase().includes(event.target.value.toLowerCase())
+  //   );
+  //   setFilteredFiles(filteredFiles);
+
+  // }
 
   const get_path = (name:string, currentFolder: IFolder) => currentFolder.path + (currentFolder.id == 'root' ? '' : '/') + name
 
   const fetchFolderFiles = useCallback(
     async (currentFolder: IFolder, masterAesKey: CryptoKey) => {
       if (!user.masterAesKey) {
-        return; // Wait until the user.masterAesKey is set before proceeding
+        return; 
       }
       try {
         const response = await axiosInstance.get(`/api/folders/${currentFolder.id}`, {
         });
         
-        const data = response.data; // Assuming response is in JSON format
+        const data = response.data; 
         
         
         // Map the response data to the format needed for FileManager
@@ -377,35 +408,47 @@ const Manager: React.FC = () => {
     if(!user.masterAesKey) return;
     fetchFolderFiles(currentFolder,user.masterAesKey);
   }
+  const handleFolderChange = () => {
+    // if(folder && folder.id != currentFolder.id){
+      setSearchQuery('');
+    // }
+  }
   return (
-    <FileManager 
-      onNavChange={(navData : NavState) => {
-        console.log(navData)
-        if(navData.currentFolder == null ){
-          if(currentFolder.id != 'root'){
-            setNavState({...navState, currentFolder : ROOT_FOLDER})
-          }
-        }
-        else if(navData.currentFolder.id === currentFolder.id){}
-        else {
-          setNavState(navData);
-        }
-      }} 
-      files={files} 
-      masterAesKey={user.masterAesKey} 
-      onCreateFolder={handleCreateFolder} 
-      initialPath=""
-      fileUploadConfig={fileUploadConfig}
-      onRename={handleFileRename}
-      //@ts-expect-error
-      onFileUpload={handleUpload}
-      onAiModeChange={handleAiModeChange}
-      onDownload={handleDownload}
-      filePreviewPath={import.meta.env.VITE_API_FILES_BASE_URL}
-      onDecryption={handleDecryption}
-      height="100vh"
-      onRefresh={handleRefresh}
-    />
+
+        <FileManager
+          onNavChange={(navData : NavState) => {
+            if(navData.currentFolder == null ){
+              if(currentFolder.id != 'root'){
+                setNavState({...navState, currentFolder : ROOT_FOLDER})
+                onFolderChange?.(ROOT_FOLDER);
+              }
+            }
+            else if(navData.currentFolder.id === currentFolder.id){}
+            else {
+              setNavState(navData);
+              onFolderChange?.(navData.currentFolder);
+            }
+          }}
+          files={filteredFiles}
+          masterAesKey={user.masterAesKey}
+          onCreateFolder={handleCreateFolder}
+          initialPath=""
+          fileUploadConfig={fileUploadConfig}
+          onRename={handleFileRename}
+          //@ts-expect-error
+          onFileUpload={handleUpload}
+          onAiModeChange={handleAiModeChange}
+          onDownload={handleDownload}
+          filePreviewPath={import.meta.env.VITE_API_FILES_BASE_URL}
+          onDecryption={handleDecryption}
+          height="100vh"
+          onRefresh={handleRefresh}
+          onFileOpen={console.log}
+          onFolderChange={handleFolderChange}
+          searchValue={searchQuery}
+          setSearchValue={setSearchQuery}
+        />
+      
   );
 };
 

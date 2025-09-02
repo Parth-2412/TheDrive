@@ -12,6 +12,7 @@ import * as XLSX from 'xlsx';
 import { renderAsync } from 'docx-preview';
 import "./PreviewFile.action.scss";
 import { getMimeType } from "../../../../../app/src/util";
+import { TbLoader3 } from "react-icons/tb";
 
 
 const imageExtensions = ["jpg", "jpeg", "png"];
@@ -49,8 +50,10 @@ const PreviewFileAction = ({ filePreviewPath, filePreviewComponent, onDownload, 
   // Decrypt file data for preview
   useEffect(() => {
     const decryptFile = async () => {
+
       if (onDecryption && selectedFiles[0] && !selectedFiles[0].isDirectory) {
         try {
+          
           setIsLoading(true);
           const decryptedData = await onDecryption(selectedFiles[0]);
           const blob = new Blob([decryptedData], { type : getMimeType(selectedFiles[0].name)});
@@ -222,7 +225,9 @@ const PreviewFileAction = ({ filePreviewPath, filePreviewComponent, onDownload, 
             </Button>
           </div>
         ))}
-      {imageExtensions.includes(extension) && (
+
+        {isLoading && (<span className="loading-indicator">Decrypting...</span>)}
+      {imageExtensions.includes(extension) && !isLoading && (
         <>
           <Loader isLoading={isLoading} />
           <div className="image-preview-container">
@@ -253,13 +258,13 @@ const PreviewFileAction = ({ filePreviewPath, filePreviewComponent, onDownload, 
           </div>
         </>
       )}
-      {videoExtensions.includes(extension) && (
+      {videoExtensions.includes(extension) && !isLoading && (
         <video src={displayPath} className="video-preview" controls autoPlay />
       )}
-      {audioExtensions.includes(extension) && (
+      {audioExtensions.includes(extension) && !isLoading && (
         <audio src={displayPath} controls autoPlay className="audio-preview" />
       )}
-      {pdfExtensions.includes(extension) && (
+      {pdfExtensions.includes(extension) && !isLoading && (
         <>
           <Loader isLoading={isLoading} />
           <div className="pdf-preview-container">
@@ -290,7 +295,7 @@ const PreviewFileAction = ({ filePreviewPath, filePreviewComponent, onDownload, 
           </div>
         </>
       )}
-      {csvExtensions.includes(extension) && !hasError && (
+      {csvExtensions.includes(extension) && !hasError && !isLoading && (
         <>
           <Loader isLoading={isLoading} />
           <div className="csv-preview-container">
@@ -338,7 +343,7 @@ const PreviewFileAction = ({ filePreviewPath, filePreviewComponent, onDownload, 
           </div>
         </>
       )}
-      {excelExtensions.includes(extension) && !hasError && (
+      {excelExtensions.includes(extension) && !hasError && !isLoading && (
         <>
           <Loader isLoading={isLoading} />
           <div className="excel-preview-container">
@@ -430,7 +435,7 @@ const PreviewFileAction = ({ filePreviewPath, filePreviewComponent, onDownload, 
           </div>
         </>
       )}
-      {officeExtensions.includes(extension) && (
+      {officeExtensions.includes(extension) && !isLoading && (
         <>
           <Loader isLoading={isLoading} />
           <div className="office-preview-container">
@@ -481,8 +486,8 @@ const PreviewFileAction = ({ filePreviewPath, filePreviewComponent, onDownload, 
             </div>
           </div>
         </>
-      )}     
-       {textExtensions.includes(extension) && !hasError && (
+      )}
+      {textExtensions.includes(extension) && !hasError && !isLoading && (
         <>
           <Loader isLoading={isLoading} />
           <div className="text-preview-container">

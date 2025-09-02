@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { BsCopy, BsFolderPlus, BsGridFill, BsScissors } from "react-icons/bs";
-import { FiRefreshCw } from "react-icons/fi";
+import { FiRefreshCw, FiSearch, FiX } from "react-icons/fi";
 import { TbSparkles } from "react-icons/tb"; 
 import {
   MdClear,
@@ -21,7 +21,7 @@ import "./Toolbar.scss";
 import { getActions } from "../../utils/checkAllFilesSame";
 import { FaMinusCircle } from "react-icons/fa";
 
-const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions, onNavChange, onAiModeChange }) => {
+const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions, onNavChange, onAiModeChange, searchValue, setSearchValue }) => {
   const [showToggleViewMenu, setShowToggleViewMenu] = useState(false);
   const navData = useFileNavigation();
   const { selectedFiles, setSelectedFiles, handleDownload } = useSelection();
@@ -191,6 +191,28 @@ const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions, onNavC
             ))}
         </div>
         <div>
+
+          <div className="search-container">
+            <FiSearch className="search-icon" size={16} />
+            <input 
+              name="search" 
+              type="text" 
+              placeholder={"Search files..."} 
+              className="search-input"
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              />
+            {searchValue && (
+              <button 
+              className="search-clear" 
+              onClick={() => setSearchValue("")}
+              title="Clear search"
+              >
+                <FiX size={16} />
+              </button>
+            )}
+          </div>
+
           {toolbarRightItems.map((item, index) => (
             <div key={index} className="toolbar-left-items">
               <button className="item-action icon-only" title={item.title} onClick={item.onClick}>
@@ -199,11 +221,10 @@ const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions, onNavC
               {index !== toolbarRightItems.length - 1 && <div className="item-separator"></div>}
             </div>
           ))}
-
           {showToggleViewMenu && (
             <LayoutToggler
-              setShowToggleViewMenu={setShowToggleViewMenu}
-              onLayoutChange={onLayoutChange}
+            setShowToggleViewMenu={setShowToggleViewMenu}
+            onLayoutChange={onLayoutChange}
             />
           )}
         </div>

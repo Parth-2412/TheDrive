@@ -87,7 +87,7 @@ export const useShortcutHandler = (triggerAction, onRefresh, permissions) => {
   useKeyPress(shortcuts.delete, triggerDelete, triggerAction.isActive);
   useKeyPress(shortcuts.jumpToFirst, triggerSelectFirst, triggerAction.isActive);
   useKeyPress(shortcuts.jumpToLast, triggerSelectLast, triggerAction.isActive);
-  useKeyPress(shortcuts.selectAll, triggerSelectAll, triggerAction.isActive);
+  // useKeyPress(shortcuts.selectAll, triggerSelectAll, triggerAction.isActive);
   useKeyPress(shortcuts.clearSelection, triggerClearSelection, triggerAction.isActive);
   useKeyPress(shortcuts.refresh, triggerRefresh, triggerAction.isActive);
   useKeyPress(shortcuts.gridLayout, triggerGridLayout, triggerAction.isActive);

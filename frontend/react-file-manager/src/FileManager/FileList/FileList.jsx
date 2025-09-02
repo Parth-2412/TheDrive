@@ -17,7 +17,8 @@ const FileList = ({
   enableFilePreview,
   triggerAction,
   permissions,
-  onAiModeChange
+  onAiModeChange,
+  filteredFiles
 }) => {
   const { currentPathFiles, sortConfig, setSortConfig } = useFileNavigation();
   const filesViewRef = useRef(null);
@@ -58,7 +59,7 @@ const FileList = ({
         <FilesHeader unselectFiles={unselectFiles} onSort={handleSort} sortConfig={sortConfig} />
       )}
 
-      {currentPathFiles?.length > 0 ? (
+      {filteredFiles.length > 0 ? (currentPathFiles?.length > 0 ? (
         <>
           {currentPathFiles.map((file, index) => (
             <FileItem
@@ -81,7 +82,7 @@ const FileList = ({
         </>
       ) : (
         <div className="empty-folder">{t("folderEmpty")}</div>
-      )}
+      )) : <div className="empty-folder">No files found for given search result.</div>}
 
       <ContextMenu
         filesViewRef={filesViewRef}
