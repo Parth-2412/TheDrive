@@ -29,3 +29,6 @@ Pillow
 pdfminer.six
 pi-heif
 pdf2image
+transformers
+torch
+PyMuPDF

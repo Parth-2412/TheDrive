@@ -415,9 +415,9 @@ const Manager = () => {
           onFolderChange={handleFolderChange}
           searchValue={searchQuery}
           setSearchValue={setSearchQuery}
-          // onModalClose={() => {
-          //   if(navState.currentFileOpened != null) setNavState({...navState, currentFileOpened : null});
-          // }}
+          onModalClose={() => {
+            if(navState.currentFileOpened != null) setNavState({...navState, currentFileOpened : null});
+          }}
         />
       
   );

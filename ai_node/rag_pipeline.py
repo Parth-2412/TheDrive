@@ -1,11 +1,9 @@
-# rag_pipeline.py
 """
 Retrieval-Augmented Generation (RAG) pipeline with ChromaDB integration.
 Works with local ChromaDB instances for fast vector similarity search.
 """
 
 from typing import List, Dict, Any, Optional
-import numpy as np
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
@@ -31,52 +29,47 @@ class RAGPipeline:
         genai.configure(api_key=api_key)
         self.gemini = genai.GenerativeModel(gemini_model)
 
-    def cosine_similarity(self, a: List[float], b: List[float]) -> float:
-        """Calculate cosine similarity between two vectors."""
-        a = np.array(a)
-        b = np.array(b)
-        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
-
     async def retrieve_context_from_chromadb(self, vector_db_path: str, query: str, k: int = 5) -> List[Dict[str, Any]]:
         """
         Retrieve top-k relevant chunks from ChromaDB based on semantic similarity.
+        ChromaDB handles the similarity calculation internally.
         """
         try:
             # Generate query embedding
             query_embedding = self.embedding_model.embed_query(query)
-            
+
             # Connect to ChromaDB
             client = chromadb.PersistentClient(path=vector_db_path)
             collection = client.get_collection("documents")
-            
-            # Query ChromaDB for similar chunks
+
+            # Query ChromaDB for similar chunks (ChromaDB handles similarity internally)
             results = collection.query(
                 query_embeddings=[query_embedding],
                 n_results=k,
                 include=["documents", "metadatas", "distances"]
             )
-            
+
             if not results["documents"][0]:
                 return []
-            
-            # Format results for consistency
+
+            # Format results - ChromaDB already did the similarity calculation
             chunks_with_similarity = []
             for i, (doc, metadata, distance) in enumerate(zip(
-                results["documents"][0], 
-                results["metadatas"][0], 
+                results["documents"][0],
+                results["metadatas"][0],
                 results["distances"][0]
             )):
-                # Convert distance to similarity (ChromaDB returns L2 distance)
-                similarity = 1 / (1 + distance)  # Simple conversion
-                
+                # Convert ChromaDB's distance to similarity score for consistency
+                similarity = 1 / (1 + distance)  # Simple distance-to-similarity conversion
+
                 chunks_with_similarity.append({
                     "content": doc,
                     "metadata": metadata,
                     "similarity": similarity
                 })
-            
+
             return chunks_with_similarity
-            
+
         except Exception as e:
             logger.error(f"Error retrieving context from ChromaDB: {e}")
             return []

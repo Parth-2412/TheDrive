@@ -678,7 +678,7 @@ async def chat_start(
                 all_chunks.extend(folder_data)
             else:
                 print(folder_response.json())
-            
+        print(set([chunk["file"] for chunk in all_chunks]))
         
         if not all_chunks:
             raise HTTPException(status_code=404, detail="No file in this folder is ai-enable")

@@ -136,13 +136,13 @@ def get_chunks_folder(request):
     if serializer.is_valid():
         user = get_user_for_ai_node(serializer.validated_data['public_key'], AINode.objects.filter(public_key=request.user).first())
         folder_id = serializer.validated_data["folder_id"]
-        # Determine if context_id refers to a file or folder
+
         chunk_data = None
         if folder_id == "root":
             chunk_data = get_chunks_for_folder(None, user)
         else:
             chunk_data = get_chunks_for_folder(folder_id, user)
-        
+            # print(set([chunk.file for chunk in chunk_data]))
 
         return Response(DocumentChunkSerializer(chunk_data, many=True).data)
     return Response(serializer.errors, status=400)
