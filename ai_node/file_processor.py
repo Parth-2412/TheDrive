@@ -26,16 +26,28 @@ class FileProcessor:
             add_start_index=True  # Adds character positions for highlighting
         )
         
+        # Text-based file extensions
+        self.text_extensions = [
+            '.txt', '.sh', '.html', '.htm', '.xml', '.json', '.yaml', '.yml',
+            '.md', '.markdown', '.js', '.ts', '.jsx', '.tsx', '.css', '.scss',
+            '.sass', '.py', '.java', '.cpp', '.c', '.h', '.hpp', '.php', '.rb',
+            '.go', '.rs', '.sql', '.log', '.conf', '.config', '.ini', '.env',
+            '.gitignore', '.dockerfile', '.makefile'
+        ]
+        
         self.loader_map = {
             '.pdf': PyPDFLoader,
             '.docx': Docx2txtLoader,
-            '.txt': TextLoader,
             '.pptx': UnstructuredPowerPointLoader,
             '.csv': CSVLoader,
             '.xlsx': UnstructuredExcelLoader,
             '.jpg': UnstructuredImageLoader,
             '.png': UnstructuredImageLoader,
         }
+        
+        # Add text extensions to loader map
+        for ext in self.text_extensions:
+            self.loader_map[ext] = TextLoader
 
 
     
