@@ -35,7 +35,7 @@ const FileManager = ({
   onDelete = () => null,
   onLayoutChange = () => {},
   onRefresh,
-  onFileOpen = () => {},
+  onFileOpen,
   onFolderChange = () => {},
   onSelect,
   onError = () => {},
@@ -58,7 +58,8 @@ const FileManager = ({
   onAiModeChange,
   onDecryption,
   searchValue,
-  setSearchValue
+  setSearchValue,
+  onModalClose
 }) => {
   const [isNavigationPaneOpen, setNavigationPaneOpen] = useState(defaultNavExpanded);
   const triggerAction = useTriggerAction();
@@ -152,6 +153,7 @@ const FileManager = ({
                     onFileUpload={onFileUpload}
                     onDownload={onDownload}
                     onDecryption={onDecryption}
+                    onModalClose={onModalClose}
                   />
                 </LayoutProvider>
               </ClipBoardProvider>

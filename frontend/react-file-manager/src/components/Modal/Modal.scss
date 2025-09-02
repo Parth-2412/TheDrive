@@ -1,5 +1,34 @@
 @import "../../styles/variables";
 
+.fm-modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.fm-modal-content {
+  background: white;
+  border: 1px solid #c6c6c6;
+  border-radius: 5px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.253);
+  max-height: 95vh;
+  max-width: 95vw;
+  min-height: 60vh;
+  min-width: 70vw;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideIn 0.3s ease-out;
+}
+
 .fm-modal-header {
   display: flex;
   justify-content: space-between;
@@ -7,6 +36,7 @@
   border-bottom: 1px solid $border-color;
   padding: 0.3rem 1rem;
   font-size: $fm-font-size;
+  flex-shrink: 0;
 
   .fm-modal-heading {
     margin: 0;
@@ -15,20 +45,27 @@
   }
 }
 
-.dialog[open] {
-  animation: expand 0.4s forwards;
+.fm-modal-body {
+  flex: 1;
+  overflow: auto;
+}
 
-  &::backdrop {
-    background: rgba(0, 0, 0, 0.5);
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
-@keyframes expand {
+@keyframes slideIn {
   from {
     transform: scale(0.4);
+    opacity: 0;
   }
-
   to {
     transform: scale(1);
+    opacity: 1;
   }
 }
