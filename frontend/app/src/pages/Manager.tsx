@@ -12,46 +12,14 @@ import { getMimeType, showError } from "../util";
 import { RecoilState, useRecoilState } from "recoil";
 import { User, userState } from "../state/user";
 import { checkAllFilesSame } from "../../../react-file-manager/src/utils/checkAllFilesSame";
+import { driveState, IFile, IFolder, _navState, NavState, ROOT_FOLDER } from "../state/nav";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
 
-interface StorageEntity {
-  id : string;
-  name : string;
-  ai_enabled : boolean;
-  created_at : string;
-  updated_at : string;
-  path : string;
-}
-
-interface IFile extends StorageEntity {
-  file_size: number;
-  file_hash : string;
-  isDirectory: false;
-  key_encrypted: string;
-  file_iv: string;
-  key_encrypted_iv: string;
-  folder : string;
-}
-interface IFolder extends StorageEntity {
-  parent: string | null;
-  isDirectory: true;
-}
-interface NavState {
-  currentFolder: IFolder;
-}
 
 
-const ROOT_FOLDER : IFolder = {
-  path : '/',
-  parent: '',
-  id : 'root',
-  name : '',
-  ai_enabled: false,
-  created_at : '',
-  updated_at: '',
-  isDirectory: true,
-}
+
+
 
 const fileUploadConfig = {
   url: BACKEND_URL+'/api/files/',
@@ -69,20 +37,10 @@ function removeDuplicates(arr : (IFile|IFolder)[]) {
     });
 }
 
-const Manager = ({
-  currentFolderPath, 
-  onFolderChange,
-  onFileOpen,
-  onModalClose = () => {},
-}: {
-  currentFolderPath: string;
-  onFolderChange?: (folder: IFolder) => void;
-  onFileOpen?: (file: any) => void;
-  onModalClose?: () => void;
-}) => {
-  const [files, setFiles] = useState<(IFile|IFolder)[]>([]);
+const Manager = () => {
+  const [files, setFiles] = useRecoilState(driveState);
   const [user,_] = useRecoilState<User>(userState as RecoilState<User>)
-  const [navState, setNavState] = useState<NavState>({ currentFolder : ROOT_FOLDER });
+  const [navState, setNavState] = useRecoilState(_navState);
   const { currentFolder } = navState;
   const [searchQuery, setSearchQuery] = useState('');
   const [present] = useIonToast();
@@ -428,17 +386,14 @@ const Manager = ({
 
         <FileManager
           onNavChange={(navData : NavState) => {
-            console.log(navData)
             if(navData.currentFolder == null ){
               if(currentFolder.id != 'root'){
                 setNavState({...navState, currentFolder : ROOT_FOLDER})
-                onFolderChange?.(ROOT_FOLDER);
               }
             }
             else if(navData.currentFolder.id === currentFolder.id){}
             else {
               setNavState(navData);
-              onFolderChange?.(navData.currentFolder);
             }
           }}
           files={filteredFiles}
@@ -455,11 +410,15 @@ const Manager = ({
           onDecryption={handleDecryption}
           height="100vh"
           onRefresh={handleRefresh}
-          onFileOpen={onFileOpen}
+          onFileOpen={(file : IFile) => {
+            setNavState({...navState, currentFileOpened : file})
+          }}
           onFolderChange={handleFolderChange}
           searchValue={searchQuery}
           setSearchValue={setSearchQuery}
-          onModalClose={onModalClose}
+          onModalClose={() => {
+            if(navState.currentFileOpened != null) setNavState({...navState, currentFileOpened : null});
+          }}
         />
       
   );

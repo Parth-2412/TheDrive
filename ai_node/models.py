@@ -13,7 +13,7 @@ class ChatMessageDB(Base):
     public_key = Column(String, nullable=False)
     role = Column(String, nullable=False)  # 'user' or 'assistant'
     content = Column(Text, nullable=False)
-    created_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
     
 class ChatSessionDB(Base):
     __tablename__ = "chat_sessions"
@@ -21,8 +21,7 @@ class ChatSessionDB(Base):
     session_id = Column(String, primary_key=True)
     public_key = Column(String, nullable=False)
     vector_db_path = Column(String, nullable=False)
-    created_at = Column(DateTime, nullable=False)
-    updated_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
 

@@ -49,6 +49,7 @@ class FileType(TypedDict):
 
 class StartChatRequest(BaseModel):
     files: List[FileType]
+    folder_id : str
 class IngestRequest(BaseModel):
     file_id : str
 
@@ -413,11 +414,11 @@ async def verify_user_signature(signed_request: SignedRequest[T]) -> T:
     
     # Create the message that was signed (JSON string of data, sorted for consistency)
     message_to_verify = data.model_dump_json()
+
     # Verify the signature
     try:
         verify_key = nacl.signing.VerifyKey(public_key_bytes)
-        
-        # Verify the signature
+        print(message_to_verify)
         verify_key.verify(
             message_to_verify.encode('utf-8'),
             signature_bytes,
@@ -656,17 +657,7 @@ async def chat_start(
     try:
         db_session = SessionLocal()
         
-        # Generate unique session ID
-        session_id = str(uuid.uuid4())
         
-        # Create vector database directory
-        vector_db_dir = f"./vector_dbs"
-        os.makedirs(vector_db_dir, exist_ok=True)
-        vector_db_path = os.path.join(vector_db_dir, f"{session_id}.db")
-        
-        # Initialize ChromaDB
-        client = chromadb.PersistentClient(path=vector_db_path)
-        collection = client.get_or_create_collection("documents")
         
         # Fetch chunks from server endpoints
         all_chunks = []
@@ -674,11 +665,20 @@ async def chat_start(
         
         # Get file chunks
         if request.files:
-            files_response = await service.post('/api/chunks/files/', 
-                                              json={"files": [file.id for file in request.files]})
+            files_response = await service.get('/api/chunks/files/', 
+                                              json={"files": [file["id"] for file in request.files], "public_key": signed_request.public_key})
             if files_response.status_code == 200:
                 files_data = files_response.json()
-                all_chunks.extend([ {**chunk, "file_name" : id_to_name[chunk["file"]] } for chunk in files_data.get("chunks", [])])
+                all_chunks.extend([ {**chunk, "file_name" : id_to_name[chunk["file"]] } for chunk in files_data])
+        if request.folder_id:
+            folder_response = await service.get('/api/chunks/folder/', 
+                                              json={"folder_id": request.folder_id, "public_key": signed_request.public_key})
+            if folder_response.status_code == 200:
+                folder_data = folder_response.json()
+                all_chunks.extend(folder_data)
+            else:
+                print(folder_response.json())
+            
         
         if not all_chunks:
             raise HTTPException(status_code=404, detail="No chunks found for specified folders/files")
@@ -691,8 +691,8 @@ async def chat_start(
         
         for i, chunk_data in enumerate(all_chunks):
             # Decrypt chunk content and embedding
-            decrypted_content = decrypt_input(chunk_data["chunk"])
-            decrypted_embedding = decrypt_input_bytes(chunk_data["embedding"])
+            decrypted_content = decrypt_input(chunk_data["chunk_content_encrypted"], service.master_key)
+            decrypted_embedding = decrypt_input_bytes(chunk_data["embedding_encrypted"], service.master_key)
             
             # Prepare for ChromaDB
             chunk_id = chunk_data.get('id', f"chunk_{i}")
@@ -705,15 +705,18 @@ async def chat_start(
                 "char_end": chunk_data.get("chunk_end", 0)
             })
             ids.append(chunk_id)
-            embeddings.append(np.frombuffer(base64.b64decode(decrypted_embedding), dtype=np.float32))
+            embeddings.append(np.frombuffer(decrypted_embedding, dtype=np.float32))
+
+        # Generate unique session ID
+        session_id = str(uuid.uuid4())
         
-        # Add to ChromaDB collection
-        collection.add(
-            documents=documents,
-            metadatas=metadatas,
-            ids=ids,
-            embeddings=embeddings
-        )
+        # Create vector database directory
+        vector_db_dir = f"./vector_dbs"
+        os.makedirs(vector_db_dir, exist_ok=True)
+        vector_db_path = os.path.join(vector_db_dir, f"{session_id}.db")
+        
+        
+        
         
         # Save session to database
         chat_session = ChatSessionDB(
@@ -721,12 +724,19 @@ async def chat_start(
             public_key=signed_request.public_key,
             vector_db_path=vector_db_path,
             created_at=utc_now(),
-            updated_at=utc_now()
         )
-        
         db_session.add(chat_session)
         await db_session.commit()
-        
+        # Initialize ChromaDB
+        client = chromadb.PersistentClient(path=vector_db_path)
+        collection = client.get_or_create_collection("documents")
+        # Add to ChromaDB collection
+        collection.add(
+            documents=documents,
+            metadatas=metadatas,
+            ids=ids,
+            embeddings=embeddings
+        )
         return {
             "session_id": session_id,
             "chunks_loaded": len(all_chunks),
@@ -813,11 +823,7 @@ async def chat(
         )
         db_session.add(assistant_message)
         
-        # Update session timestamp
-        await db_session.execute(
-            text("UPDATE chat_sessions SET updated_at = :updated_at WHERE session_id = :session_id"),
-            {"updated_at": utc_now(), "session_id": request.session_id}
-        )
+       
         await db_session.commit()
         
         return {

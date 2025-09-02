@@ -132,7 +132,7 @@ def get_chunks_folder(request):
     """
     Get chunks and embeddings for a given file or folder.
     """
-    serializer = StoreFilesChunksSerializer(data=request.data)
+    serializer = GetFolderChunksSerializer(data=request.data)
     if serializer.is_valid():
         user = get_user_for_ai_node(serializer.validated_data['public_key'], AINode.objects.filter(public_key=request.user).first())
         folder_id = serializer.validated_data["folder_id"]
@@ -145,6 +145,7 @@ def get_chunks_folder(request):
         
 
         return Response(DocumentChunkSerializer(chunk_data, many=True).data)
+    return Response(serializer.errors, status=400)
 
 
 

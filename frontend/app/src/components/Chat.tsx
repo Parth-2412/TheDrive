@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   IonContent,
   IonPage,
@@ -11,26 +11,200 @@ import {
   IonMenuButton,
   IonMenu,
   IonSplitPane,
-  IonLabel,
+  IonToast,
+  IonSpinner,
 } from '@ionic/react';
 import { 
   chatbubbleEllipsesOutline, 
   closeOutline, 
-  ellipsisVerticalOutline
+  ellipsisVerticalOutline,
+  sendOutline
 } from 'ionicons/icons';
 import '@ionic/react/css/core.css';
-import { ProChat } from '@ant-design/pro-chat';
+import { ChatMessage, ProChat } from '@ant-design/pro-chat';
 import Manager from '../pages/Manager';
 import './Chat.css'
 import { createGesture } from '@ionic/react';
-import { set } from 'js-cookie';
+import { aiNodeInstance } from '../services/api.service'; // Assume this is your configured axios instance
+import { useRecoilState } from 'recoil';
+import { _navState, driveState, IFile, IFolder } from '../state/nav';
+
+// Types
+
+
+interface Citation {
+  source_id: number;
+  file_name: string;
+  file_id: string;
+  chunk_index: number;
+  char_start: number;
+  char_end: number;
+  similarity: number;
+  chunk_content: string;
+}
+
+interface ChatResponse {
+  session_id: string;
+  query: string;
+  answer: string;
+  citations: Citation[];
+  context_chunks_used: number;
+}
+
+interface SessionResponse {
+  session_id: string;
+  chunks_loaded: number;
+}
+
+// Custom hook for chat session management
+const useChatSession = () => {
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const startSession = useCallback(async (entity : IFile | IFolder) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const payload = entity.isDirectory ? {
+        files: [],
+        folder_id : entity.id,
+      } : {
+        files : [entity.id],
+        folder_id : "",
+      }
+      const response = await aiNodeInstance.post<SessionResponse>('/chat/start',payload);
+      
+      setSessionId(response.data.session_id);
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err?.response?.data?.detail || 'Failed to start chat session';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const closeSession = useCallback(async () => {
+    if (!sessionId) return;
+    
+    try {
+      await aiNodeInstance.post('/chat/close', {
+        session_id: sessionId
+      });
+      setSessionId(null);
+    } catch (err) {
+      console.error('Failed to close session:', err);
+    }
+  }, [sessionId]);
+
+  const sendMessage = useCallback(async (message: string): Promise<ChatResponse> => {
+    if (!sessionId) {
+      throw new Error('No active chat session');
+    }
+
+    const response = await aiNodeInstance.post<ChatResponse>('/chat', {
+      session_id: sessionId,
+      query: message
+    });
+
+    return response.data;
+  }, [sessionId]);
+
+  return {
+    sessionId,
+    isLoading,
+    error,
+    startSession,
+    closeSession,
+    sendMessage,
+    clearError: () => setError(null)
+  };
+};
 
 // Chat Component
-const Chat = ({currentContext, currentFolderPath, onSwitchToCurrentContext}: {
-  currentContext: string;
-  currentFolderPath: string;
-  onSwitchToCurrentContext: () => void;
-}) => {
+const Chat = () => {
+
+  const [{ currentFolder, currentFileOpened }]= useRecoilState(_navState)
+  const [currentContext, setCurrentContext] = useState<IFile | IFolder | null>(null);
+  const currentPath = currentFileOpened || currentFolder;
+
+  const {
+    sessionId,
+    isLoading: sessionLoading,
+    error: sessionError,
+    startSession,
+    closeSession,
+    sendMessage,
+    clearError
+  } = useChatSession();
+
+  const [isTyping, setIsTyping] = useState(false);
+
+  // Cleanup session on unmount
+  useEffect(() => {
+    return () => {
+      if (sessionId) {
+        closeSession();
+      }
+    };
+  }, [sessionId, closeSession]);
+
+  const handleSendMessage = async (content: ChatMessage[]): Promise<any> => {
+  
+
+    setIsTyping(true);
+    console.log(content)
+    try {
+      if(!currentContext){
+        await startSession(currentPath)
+        setCurrentContext(currentPath)
+      }
+      const response = await sendMessage(content[-1].content?.toString() as string);
+      
+      // Format response with citations if available
+      let formattedResponse = response.answer;
+      if (response.citations && response.citations.length > 0) {
+        formattedResponse += '\n\n**Sources:**\n';
+        response.citations.forEach((citation, index) => {
+          formattedResponse += `${index + 1}. ${citation.file_name} (similarity: ${(citation.similarity * 100).toFixed(1)}%)\n`;
+        });
+      }
+      
+      return {
+        id: Date.now().toString(),
+        content: formattedResponse,
+        createAt: Date.now(),
+        role: 'assistant' as const
+      };
+    } catch (error: any) {
+      console.error('Chat error:', error);
+      const errorMsg = error?.response?.data?.detail || error.message || 'Failed to send message';
+      return {
+        id: Date.now().toString(),
+        content: `❌ Error: ${errorMsg}`,
+        createAt: Date.now(),
+        role: 'assistant' as const
+      };
+    } finally {
+      setIsTyping(false);
+    }
+  };
+  console.log(isTyping);
+  const getHelloMessage = () => {
+    if (sessionLoading) {
+      return "Initializing chat session...";
+    }
+    if (sessionError) {
+      return `Error: ${sessionError}`;
+    }
+    if (!sessionId) {
+      return "Start chatting!";
+    }
+  };
+
   return (
     <IonPage>
       <IonHeader>
@@ -41,37 +215,62 @@ const Chat = ({currentContext, currentFolderPath, onSwitchToCurrentContext}: {
           <IonTitle>AI Assistant</IonTitle>
           <IonButtons slot="end">
             <IonButton shape='round' fill="clear">
-            {currentContext !== currentFolderPath ? <IonButton 
-              className="context-switch-button" 
-              size="small" 
-              fill="clear"
-              
-              onClick={onSwitchToCurrentContext}
-            >
-              Switch to Current
-            </IonButton> : ''}
-              <IonIcon icon={ellipsisVerticalOutline} />
+              {currentContext && currentContext !== currentPath && (
+                <IonButton 
+                  className="context-switch-button" 
+                  size="small" 
+                  fill="clear"
+                  onClick={async () => {
+                      await startSession(currentPath)
+                      setCurrentContext(currentPath)
+                  }}
+                >
+                  Switch to Current
+                </IonButton>
+              )}
+            </IonButton>
+            <IonButton shape="round">
+
+                <IonIcon icon={ellipsisVerticalOutline} />
             </IonButton>
           </IonButtons>
         </IonToolbar>
         
         <div className="context-container">
           <span className='context-row'>Context: </span>
-          <span className="context-value">{currentContext}</span>
+          <span className="context-value">{currentContext?.path}</span>
+          {sessionLoading && <IonSpinner name="crescent" />}
         </div>
       </IonHeader>
       
       <IonContent>
         <ProChat
-          request={async (messages) => {
-            // Simulate API delay
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            return "bakchod"; // Your actual implementation here
-          }}
+          request={handleSendMessage}
           locale='en-US'
           displayMode='chat'
+          helloMessage={getHelloMessage()}
+          //@ts-expect-error
+          disabled={!sessionId || sessionLoading}
+          placeholder={
+            sessionLoading ? "Initializing..." : 
+            "Start chatting!"
+          }
         />
       </IonContent>
+      
+      <IonToast
+        isOpen={!!sessionError}
+        message={sessionError || ''}
+        duration={5000}
+        color="danger"
+        onDidDismiss={clearError}
+        buttons={[
+          {
+            text: 'Dismiss',
+            role: 'cancel'
+          }
+        ]}
+      />
     </IonPage>
   );
 };
@@ -80,8 +279,9 @@ const Chat = ({currentContext, currentFolderPath, onSwitchToCurrentContext}: {
 const ChatApp: React.FC = () => {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
-  const [currentContext, setCurrentContext] = useState('/');
-  const [currentFolderPath, setCurrentFolderPath] = useState('/');
+
+  const dragRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const checkScreenSize = () => {
       setIsDesktop(window.innerWidth >= 768);
@@ -93,14 +293,10 @@ const ChatApp: React.FC = () => {
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
 
-  const toggleChat = () => {
-    setIsChatOpen(!isChatOpen);
-  };
-
-  const dragRef = useRef<HTMLDivElement>(null);
-
+  // Setup drag gesture for mobile
   useEffect(() => {
-    if(!dragRef.current) return;
+    if (!dragRef.current) return;
+    
     const gesture = createGesture({
       el: dragRef.current,
       gestureName: 'drag-chat',
@@ -108,127 +304,63 @@ const ChatApp: React.FC = () => {
       threshold: 15,
       onMove: (event) => {
         if (event.deltaY > 40) {
-          setIsChatOpen(false)
+          setIsChatOpen(false);
         }
-      },
-      onEnd: () => {
-        // Optional: Add logic to handle the end of the gesture
-      },
+      }
     });
 
     gesture.enable();
+    return () => gesture.destroy();
+  }, []);
 
-    return () => {
-      gesture.destroy();
-    };
-  }, [dragRef.current]);
-  
-  const handleSetCurrentContext = (context: string) => {
-    setCurrentContext(context);
+  const toggleChat = () => {
+    setIsChatOpen(!isChatOpen);
   };
 
-  const handleSwitchToCurrentContext = () => {
-    setCurrentContext(currentFolderPath);
-  };
-
-  const handleFolderChange = (folder: any) => {
-    console.log('Folder changed:', folder);
-    if (folder && folder.path) {
-      setCurrentFolderPath(folder.path);
-    }
-  };
-
-  const handleFileOpen = (file: any) => {
-   if (!file.isDirectory) { 
-      if (file.ai_enabled){
-    setCurrentContext(file.path);
-    }
-    else {
-      setCurrentContext("This file is not AI-enabled.");
-    }}
-  
-}
-  const handleOnModalClose = () => {
-    setCurrentContext(currentFolderPath);
-  }
 
   return (
     <>
-      {!isDesktop && isChatOpen &&  <style>
-        {`
-          @media (max-width: 768px) {
+      {!isDesktop && isChatOpen && (
+        <style>
+          {`
+            @media (max-width: 768px) {
               .file-explorer {
-              height: calc(100vh - var(--chat-height)) !important;
+                height: calc(100vh - var(--chat-height)) !important;
+              }
             }
-          }
-        `}
-        </style>}
-      <IonSplitPane  when="md">
-        <Manager 
-          currentFolderPath={currentContext} 
-          onFolderChange={handleFolderChange}
-          onFileOpen={handleFileOpen}
-          onModalClose={handleOnModalClose}
-        />
-        {isDesktop ? (<IonMenu type="overlay" side='end'>
+          `}
+        </style>
+      )}
+      
+      <IonSplitPane when="md">
+        <Manager />
+        
+        {isDesktop ? (
+          <IonMenu type="overlay" side='end'>
             <div id="main" className="main-content">
-            <Chat 
-              currentContext={currentContext}
-              currentFolderPath={currentFolderPath}
-              onSwitchToCurrentContext={handleSwitchToCurrentContext}
-            />
+              <Chat />
             </div>
-        </IonMenu>) : (
-
-            <>
-            
+          </IonMenu>
+        ) : (
+          <>
             <div className={`chat-mobile ${isChatOpen ? 'open' : ''}`}>
-                <div className="chat-mobile-handle" ref={dragRef}>
-                  <span />
-                </div>
-                <div className="chat-header">
-                  <span className="chat-header-title">AI Assistant</span>
-                  <button className="close-button" onClick={toggleChat}>
-                      <IonIcon icon={closeOutline} />
-                  </button>
-                </div>
-                
-                <div className="context-container-mobile">
-                  <div className="context-row-mobile">
-                    <span className="context-label-mobile">Context:</span>
-                    <span className="context-value-mobile">{currentContext}</span>
-                    {currentContext !== currentFolderPath && (
-                      <button 
-                        className="context-switch-button-mobile" 
-                        onClick={handleSwitchToCurrentContext}
-                      >
-                        Switch
-                      </button>
-                    )}
-                  </div>
-                </div>
-                
-                <ProChat
-                request={async (messages) => {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    return "bakchod";
-                }}
-                locale='en-US'
-                displayMode='chat'
-                style={{ height : "100%"}}
-                />
+              <div className="chat-mobile-handle" ref={dragRef}>
+                <span />
+              </div>
+              
+              
+              
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <Chat />
+              </div>
             </div>
 
             <button className="fab-chat" onClick={toggleChat}>
-                <IonIcon icon={chatbubbleEllipsesOutline} size="large" />
+              <IonIcon icon={chatbubbleEllipsesOutline} size="large" />
             </button>
-        </>
+          </>
         )}
-        
       </IonSplitPane>
-      
-      
-
     </>
   );
 };
