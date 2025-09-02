@@ -36,6 +36,9 @@ GOOGLE_API_KEY=YOUR_GOOGLE_API_KEY
 ENVIRONMENT=development
 
 ```
+
+- Setup the username passwords as you want
+- To get the AI node credentials (public key, private key, master key), run `python3 ai_node/script.py`
 ## Running
 - To run the backend, you need docker-compose and docker installed and the docker daemon running
 - Then in the root folder run `docker-compose up --build`
