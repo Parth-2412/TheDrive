@@ -92,7 +92,6 @@ const App: React.FC = () => {
   }, [user]);
   useEffect(() => {
     if(user == "loading" || user === null) return;
-    console.log("once");
     const id = aiNodeInstance.interceptors.request.use(
       async (config) => {
           if (config.headers["Content-Type"] != "application/json"){
@@ -103,7 +102,6 @@ const App: React.FC = () => {
 
           // Assuming you already have data being sent in the request body
           const requestData = config.data || {}; // Fallback to an empty object if no data
-          console.log(JSON.stringify(requestData))
 
           // Generate the signature based on the public key and the data
           const signature = await generateSignature(user.privateKey, JSON.stringify(requestData));

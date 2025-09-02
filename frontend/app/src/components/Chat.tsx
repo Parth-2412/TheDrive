@@ -100,10 +100,8 @@ const useChatSession = () => {
     }
   }, [sessionId]);
 
-  const sendMessage = useCallback(async (message: string): Promise<ChatResponse> => {
-    if (!sessionId) {
-      throw new Error('No active chat session');
-    }
+  const sendMessage = useCallback(async (message: string, sessionId : string): Promise<ChatResponse> => {
+    
 
     const response = await aiNodeInstance.post<ChatResponse>('/chat', {
       session_id: sessionId,
@@ -152,17 +150,18 @@ const Chat = () => {
     };
   }, [sessionId, closeSession]);
 
-  const handleSendMessage = async (content: ChatMessage[]): Promise<any> => {
+  const handleSendMessage = async (content: ChatMessage[]): Promise<string> => {
   
 
     setIsTyping(true);
-    console.log(content)
     try {
+      let _session = sessionId;
       if(!currentContext){
-        await startSession(currentPath)
+        const response = await startSession(currentPath)
+        _session = response.session_id
         setCurrentContext(currentPath)
       }
-      const response = await sendMessage(content[-1].content?.toString() as string);
+      const response = await sendMessage(content.at(-1)?.content?.toString() as string, _session as string);
       
       // Format response with citations if available
       let formattedResponse = response.answer;
@@ -173,26 +172,15 @@ const Chat = () => {
         });
       }
       
-      return {
-        id: Date.now().toString(),
-        content: formattedResponse,
-        createAt: Date.now(),
-        role: 'assistant' as const
-      };
+      return formattedResponse;
     } catch (error: any) {
       console.error('Chat error:', error);
       const errorMsg = error?.response?.data?.detail || error.message || 'Failed to send message';
-      return {
-        id: Date.now().toString(),
-        content: `❌ Error: ${errorMsg}`,
-        createAt: Date.now(),
-        role: 'assistant' as const
-      };
+      return errorMsg;
     } finally {
       setIsTyping(false);
     }
   };
-  console.log(isTyping);
   const getHelloMessage = () => {
     if (sessionLoading) {
       return "Initializing chat session...";

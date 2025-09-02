@@ -114,7 +114,7 @@ def get_chunks_for_folder(folder_id, user):
             AND f.ai_enabled = true
             AND f.user_id = %s;  -- Add user_id constraint for files
         """
-        params = [folder_id, user.id]
+        params = [folder_id, user.id, user.id, user.id]
 
 
     return DocumentChunk.objects.raw(sql_query, params)

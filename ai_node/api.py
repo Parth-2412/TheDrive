@@ -681,7 +681,7 @@ async def chat_start(
             
         
         if not all_chunks:
-            raise HTTPException(status_code=404, detail="No chunks found for specified folders/files")
+            raise HTTPException(status_code=404, detail="No file in this folder is ai-enable")
         
         # Decrypt and store chunks in ChromaDB
         documents = []

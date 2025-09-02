@@ -1,5 +1,5 @@
 ## Installation Instructions
-1. `python3 install -r requirements.txt`
+1. `pip install -r requirements.txt`
 2. `python3 manage.py migrate`
    
 To run:

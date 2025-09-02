@@ -134,6 +134,7 @@ const FileManager = ({
                         permissions={permissions}
                         onAiModeChange={onAiModeChange}
                         filteredFiles={files}
+                        searchValue={searchValue}
                       />
                     </div>
                   </section>

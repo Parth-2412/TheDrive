@@ -39,7 +39,6 @@ export default async function encryptFile(file: File, masterAesKey: CryptoKey) {
 
 export async function encryptName (name: string, masterAesKey: CryptoKey) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  console.log("IV of encryptedName, ", iv)
   const encryptedName = await crypto.subtle.encrypt(
     {name: "AES-GCM", iv}, masterAesKey, new TextEncoder().encode(name)
   )

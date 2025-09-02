@@ -53,7 +53,6 @@ const RegisterPage: React.FC = () => {
 
       // Step 2: Handle server response
       const data = response.data;
-      console.log(data); // Process any further response data if needed
     } catch (err) {
       console.error(err);
       showError('An error occurred during registration');

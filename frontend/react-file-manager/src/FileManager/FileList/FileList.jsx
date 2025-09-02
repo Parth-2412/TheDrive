@@ -18,7 +18,8 @@ const FileList = ({
   triggerAction,
   permissions,
   onAiModeChange,
-  filteredFiles
+  filteredFiles,
+  searchValue
 }) => {
   const { currentPathFiles, sortConfig, setSortConfig } = useFileNavigation();
   const filesViewRef = useRef(null);
@@ -37,7 +38,7 @@ const FileList = ({
     clickPosition,
     isSelectionCtx,
   } = useFileList(onRefresh, enableFilePreview, triggerAction, permissions, onFileOpen, onAiModeChange);
-
+  console.log(filteredFiles);
   const contextMenuRef = useDetectOutsideClick(() => setVisible(false));
 
   const handleSort = (key) => {
@@ -59,7 +60,7 @@ const FileList = ({
         <FilesHeader unselectFiles={unselectFiles} onSort={handleSort} sortConfig={sortConfig} />
       )}
 
-      {filteredFiles.length > 0 ? (currentPathFiles?.length > 0 ? (
+      {!searchValue || filteredFiles.length > 0 ? (currentPathFiles?.length > 0 ? (
         <>
           {currentPathFiles.map((file, index) => (
             <FileItem

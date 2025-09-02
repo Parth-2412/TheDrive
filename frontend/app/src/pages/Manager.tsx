@@ -359,7 +359,6 @@ const Manager = () => {
 
   const handleDownload = async (files : IFile[]) => {
     files.map(async (file) => {
-      console.log(file)
       try {
         const decryptedData = await handleDecryption(file);
         const blob = new Blob([decryptedData]);
@@ -416,9 +415,9 @@ const Manager = () => {
           onFolderChange={handleFolderChange}
           searchValue={searchQuery}
           setSearchValue={setSearchQuery}
-          onModalClose={() => {
-            if(navState.currentFileOpened != null) setNavState({...navState, currentFileOpened : null});
-          }}
+          // onModalClose={() => {
+          //   if(navState.currentFileOpened != null) setNavState({...navState, currentFileOpened : null});
+          // }}
         />
       
   );
