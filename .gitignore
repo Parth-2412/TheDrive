@@ -4,3 +4,5 @@ __pycache__
 node_modules/
 TheDrive_env
 test_data/
+
+vector_dbs/
