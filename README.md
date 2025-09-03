@@ -1,5 +1,11 @@
-## Architecture and Worklow
-Can be found at `doc.md`
+## Documentation
+For clear, precise docs hosted via GitHub Pages, see `docs/`:
+
+- Architecture & Setup: docs/architecture-setup.md
+- User Interface: docs/ui.md
+- Pipelines, Security & Compression: docs/pipelines-security.md
+
+To publish on GitHub Pages, set the repository Pages source to the `docs/` folder.
 ## Setup environment variables in the root folder
 ```
 MINIO_ROOT_USER=placeholder

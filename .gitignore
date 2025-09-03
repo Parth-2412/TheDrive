@@ -6,3 +6,6 @@ TheDrive_env
 test_data/
 
 vector_dbs/
+
+# AI Model Cache - these are large files that should be downloaded separately
+ai_node/model_cache/
