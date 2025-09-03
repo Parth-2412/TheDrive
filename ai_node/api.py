@@ -38,6 +38,10 @@ from collections import defaultdict
 from pydantic.generics import GenericModel
 
 
+#highlight api -. it wilt ake queyr and file di as input, and based on prompot explain, define,, sunaamrise (any one of thre, return a short ans enought to be in atooltip)
+
+#rag rpompot improve 
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -62,6 +66,35 @@ class CloseSessionRequest(BaseModel):
 class ChatMessage(BaseModel):
     session_id: str
     query: str
+
+class HighlightRequest(BaseModel):
+    query: str = Field(..., description="The text to highlight and explain/define/summarize")
+    file_id: str = Field(..., description="The file ID to search within")
+    prompt_type: str = Field(..., description="Type of response: 'explain', 'define', or 'summarize'")
+
+    @field_validator('prompt_type')
+    @classmethod
+    def validate_prompt_type(cls, v):
+        if v not in ['explain', 'define', 'summarize']:
+            raise ValueError('prompt_type must be one of: explain, define, summarize')
+        return v
+
+class HighlightResponse(BaseModel):
+    answer: str = Field(..., description="Short tooltip-style answer")
+    file_name: str = Field(..., description="Name of the file")
+    prompt_type: str = Field(..., description="Type of response requested")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "answer": "Machine learning is a subset of AI that enables systems to learn from data without explicit programming.",
+                    "file_name": "ai_notes.pdf",
+                    "prompt_type": "define"
+                }
+            ]
+        }
+    }
 
 
 
@@ -903,30 +936,153 @@ async def close_session(
 
 
 
-@app.post("/auth/login")
-async def manual_login():
-    """Manual login endpoint for testing"""
-    global service
-    
+@app.post("/highlight", response_model=HighlightResponse)
+async def highlight_text(
+    signed_request: SignedRequest[HighlightRequest],
+    auth: ServerService = Depends(ensure_authenticated)
+):
+    """Generate short tooltip-style explanations, definitions, or summaries for highlighted text"""
+    request = await verify_user_signature(signed_request)
+
     try:
-        if not service:
-            raise HTTPException(status_code=503, detail="Auth client not initialized")
-        
-        success = await service.login()
-        if success:
-            return {
-                "message": "Login successful",
-                "authenticated": True,
-                "timestamp": utc_now().isoformat()
-            }
-        else:
-            raise HTTPException(status_code=401, detail="Login failed")
-            
-    except HTTPException:
-        raise
+        # Fetch chunks for the specific file
+        files_response = await service.get('/api/chunks/files/',
+                                          json={"files": [request.file_id], "public_key": signed_request.public_key})
+
+        if files_response.status_code != 200:
+            raise HTTPException(status_code=404, detail="File not found or not AI-enabled")
+
+        file_chunks = files_response.json()
+
+        if not file_chunks:
+            raise HTTPException(status_code=404, detail="No chunks found for this file")
+
+        # Decrypt chunks and prepare data
+        documents = []
+        metadatas = []
+        ids = []
+        embeddings = []
+
+        for i, chunk_data in enumerate(file_chunks):
+            # Decrypt chunk content and embedding
+            decrypted_content = decrypt_input(chunk_data["chunk_content_encrypted"], service.master_key)
+            decrypted_embedding = decrypt_input_bytes(chunk_data["embedding_encrypted"], service.master_key)
+
+            # Prepare for ChromaDB
+            chunk_id = chunk_data.get('id', f"chunk_{i}")
+            documents.append(decrypted_content)
+            metadatas.append({
+                "file_name": chunk_data.get('file_name', 'Unknown'),
+                "file_id": chunk_data.get('file', 'Unknown'),
+                "chunk_index": chunk_data.get("order_in_file", i),
+                "char_start": chunk_data.get("chunk_start", 0),
+                "char_end": chunk_data.get("chunk_end", 0)
+            })
+            ids.append(chunk_id)
+            embeddings.append(np.frombuffer(decrypted_embedding, dtype=np.float32))
+
+        # Create temporary ChromaDB collection for this file
+        temp_session_id = str(uuid.uuid4())
+        vector_db_dir = f"./vector_dbs"
+        os.makedirs(vector_db_dir, exist_ok=True)
+        temp_vector_db_path = os.path.join(vector_db_dir, f"temp_{temp_session_id}.db")
+
+        client = chromadb.PersistentClient(path=temp_vector_db_path)
+        collection = client.get_or_create_collection("temp_documents")
+
+        # Add chunks to collection
+        collection.add(
+            documents=documents,
+            metadatas=metadatas,
+            ids=ids,
+            embeddings=embeddings
+        )
+
+        try:
+            # Find chunks containing the exact query text + get context
+            exact_match_chunks = []
+            context_chunks = []
+
+            # First, find chunks that contain the exact query
+            for doc, metadata in zip(documents, metadatas):
+                if request.query.lower() in doc.lower():
+                    exact_match_chunks.append({
+                        "content": doc,
+                        "metadata": metadata
+                    })
+
+            # If we found exact matches, get additional context chunks
+            if exact_match_chunks:
+                # Get more context using semantic search
+                semantic_results = await rag.retrieve_context_from_chromadb(
+                    vector_db_path=temp_vector_db_path,
+                    query=request.query,
+                    k=5  # Get more chunks for context
+                )
+
+                # Combine exact matches with semantic context
+                all_chunks = exact_match_chunks.copy()
+                for chunk in semantic_results:
+                    # Avoid duplicates
+                    if not any(existing["content"] == chunk["content"] for existing in all_chunks):
+                        all_chunks.append(chunk)
+
+                # Limit to top chunks for tooltip
+                context_chunks = all_chunks[:4]  # Max 4 chunks for tooltip context
+            else:
+                # Fallback to semantic search if no exact matches
+                context_chunks = await rag.retrieve_context_from_chromadb(
+                    vector_db_path=temp_vector_db_path,
+                    query=request.query,
+                    k=3
+                )
+
+            if not context_chunks:
+                return HighlightResponse(
+                    answer="No relevant context found for this text.",
+                    file_name=metadatas[0]["file_name"] if metadatas else "Unknown",
+                    prompt_type=request.prompt_type
+                )
+
+            # Build context from retrieved chunks
+            context_parts = []
+            for chunk in context_chunks:
+                context_parts.append(chunk['content'])
+            context_text = "\n".join(context_parts)
+
+            # Create prompt based on type
+            if request.prompt_type == "explain":
+                prompt = f"Explain this concept in simple terms: '{request.query}'\n\nContext from document:\n{context_text}\n\nProvide a brief explanation suitable for a tooltip (2-3 sentences max)."
+            elif request.prompt_type == "define":
+                prompt = f"Define this term: '{request.query}'\n\nContext from document:\n{context_text}\n\nProvide a concise definition suitable for a tooltip."
+            elif request.prompt_type == "summarize":
+                prompt = f"Summarize this: '{request.query}'\n\nContext from document:\n{context_text}\n\nProvide a brief summary suitable for a tooltip (2-3 sentences max)."
+            else:
+                prompt = f"Provide information about: '{request.query}'\n\nContext from document:\n{context_text}\n\nProvide a brief explanation suitable for a tooltip."
+
+            # Generate response using Gemini
+            response = rag.gemini.generate_content(prompt)
+            answer = response.text.strip() if hasattr(response, 'text') else str(response)
+
+            # Clean up answer for tooltip (limit length and format)
+            answer = answer.replace('\n', ' ').strip()
+            if len(answer) > 200:
+                answer = answer[:197] + "..."
+
+            return HighlightResponse(
+                answer=answer,
+                file_name=metadatas[0]["file_name"] if metadatas else "Unknown",
+                prompt_type=request.prompt_type
+            )
+
+        finally:
+            # Clean up temporary database
+            if os.path.exists(temp_vector_db_path):
+                shutil.rmtree(temp_vector_db_path, ignore_errors=True)
+
     except Exception as e:
-        logger.error(f"Manual login failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Highlight failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate highlight: {str(e)}")
 
 
 if __name__ == "__main__":

@@ -226,7 +226,7 @@ class FileProcessor:
                             page_content=description,
                             metadata={
                                 "content_type": "table_description",
-                                "file": file_name,
+                                "file_name": file_name,
                                 "page_number": page_num + 1,
                                 "table_index": i,
                                 "confidence": table_info["score"],
@@ -312,6 +312,12 @@ class FileProcessor:
                 loader = loader_class(file_path)
                 raw_docs = loader.load()
                 chunked_docs = self.text_splitter.split_documents(raw_docs)
+                
+                # Add page number for PDFs
+                if ext == '.pdf':
+                    for chunk in chunked_docs:
+                        if 'page' in chunk.metadata:
+                            chunk.metadata['page_number'] = chunk.metadata['page'] + 1
                 
                 for idx, chunk in enumerate(chunked_docs):
                     # Get character positions from text splitter
