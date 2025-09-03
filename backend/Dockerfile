@@ -18,6 +18,6 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 # Expose the port the app will run on
 EXPOSE 8000
 
-# Run Django development server (adjust for production if needed)
-CMD ["sh", "-c", "python3 manage.py makemigrations api && python3 manage.py migrate && python3 manage.py runserver 0.0.0.0:8000"]
+# Set the command to run the initialization script
+CMD ["python3", "initialize_system.py"]
 
