@@ -31,6 +31,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./ai_node:/app  # Mount the ai_node directory for development
+      - model_cache:/app/model_cache  # Add this line
     ports:
       - "5001:5001"  # Expose FastAPI on port 5000
     depends_on:
@@ -103,6 +104,8 @@ volumes:
     driver: local
   ai_node_postgres_data:
     driver: local  # Separate volume for AI node database
+  model_cache:
+    driver: local  # Add this volume definition
 
 networks:
   network:

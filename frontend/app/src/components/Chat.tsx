@@ -156,7 +156,7 @@ const Chat = () => {
     setIsTyping(true);
     try {
       let _session = sessionId;
-      if(!currentContext){
+      if(!_session){
         const response = await startSession(currentPath)
         _session = response.session_id
         setCurrentContext(currentPath)
@@ -192,7 +192,6 @@ const Chat = () => {
       return "Start chatting!";
     }
   };
-
   return (
     <IonPage>
       <IonHeader>
@@ -203,7 +202,7 @@ const Chat = () => {
           <IonTitle>AI Assistant</IonTitle>
           <IonButtons slot="end">
             <IonButton shape='round' fill="clear">
-              {currentContext && currentContext !== currentPath && (
+              {currentContext !== null && currentContext !== currentPath && (
                 <IonButton 
                   className="context-switch-button" 
                   size="small" 

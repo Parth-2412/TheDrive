@@ -184,7 +184,7 @@ const Manager = () => {
       present(showError());
     }
   }
-
+  console.log(files);
   async function handleUpload(fileData: {  file : File}, currentFolder : IFolder) {
     if(sentUploadRequests.has(fileData.file.name)) return;
     sentUploadRequests.add(fileData.file.name);
@@ -735,9 +735,9 @@ const Manager = () => {
           onFolderChange={handleFolderChange}
           searchValue={searchQuery}
           setSearchValue={setSearchQuery}
-          // onModalClose={() => {
-          //   if(navState.currentFileOpened != null) setNavState({...navState, currentFileOpened : null});
-          // }}
+          onModalClose={() => {
+            if(navState.currentFileOpened != null) setNavState({...navState, currentFileOpened : null});
+          }}
         />
         
         {/* AI Processing Progress Indicator */}
