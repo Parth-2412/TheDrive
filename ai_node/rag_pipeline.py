@@ -129,10 +129,14 @@ class RAGPipeline:
         context_parts = []
         for i, chunk in enumerate(context_chunks):
             meta = chunk['metadata']
-            file_name = meta.get('file_name', 'Unknown')
+            file_name = meta.get('file') or os.path.basename(meta.get('source', 'Unknown'))
             chunk_idx = meta.get('chunk_index', i)
+            page = meta.get('page_number')
             
-            source_label = f"[Source {i+1}: {file_name}, Chunk {chunk_idx}]"
+            source_label = f"[Source {i+1}: {file_name}"
+            if page:
+                source_label += f", Page {page}"
+            source_label += f", Chunk {chunk_idx}]"
             context_parts.append(f"{source_label}\n{chunk['content']}\n")
         
         context_text = "\n".join(context_parts)
@@ -178,10 +182,12 @@ Answer:"""
         citations = []
         for i, chunk in enumerate(context_chunks):
             meta = chunk['metadata']
+            file_name = meta.get('file') or os.path.basename(meta.get('source', 'Unknown'))
             citations.append({
                 "source_id": i + 1,
-                "file_name": meta.get('file_name', 'Unknown'),
+                "file_name": file_name,
                 "file_id": meta.get('file_id', 'Unknown'),
+                "page_number": meta.get('page_number'),
                 "chunk_index": meta.get('chunk_index', i),
                 "char_start": meta.get('char_start', 0),
                 "char_end": meta.get('char_end', 0),
