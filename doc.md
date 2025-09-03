@@ -257,14 +257,92 @@ The chat functionality provides real-time question-answering capabilities over u
 - AI Node retains no memory of conversations after sessions end ensuring no log leaks
 - Document access is limited to user-authorized
 - No training or learning occurs from user conversations hence no data is sent anywhere
-### Development Setup
-- Local development environment configuration
-- Docker Compose setup for all services
-- Environment variable configuration
-- Database initialization
 
-### Production Deployment
-- Production environment preparation
-- Security configurations
-- Scaling considerations
-- Monitoring and maintenance
+
+# Setup Instructions
+
+Follow these steps to set up TheDrive for development or production on Windows, macOS, or Linux.
+
+## Prerequisites
+
+- **Docker** and **Docker Compose** installed ([Download Docker Desktop](https://www.docker.com/products/docker-desktop/))
+- **Git** installed ([Download Git](https://git-scm.com/downloads))
+- (Optional) **Python 3.10+** and **Node.js 18+** if you want to run backend/frontend locally without Docker
+
+## 1. Clone the Repository
+
+```sh
+git clone https://github.com/Parth-2412/TheDrive.git
+cd TheDrive
+```
+
+## 2. Environment Configuration
+
+- Copy example environment files (if provided) or create your own `.env` files for backend and AI node as needed.
+- Set required secrets (e.g., Django secret key, database credentials, MinIO keys, Gemini API key) in the respective `.env` files.
+
+## 3. Running with Docker (Recommended)
+
+### Windows, macOS, Linux (Docker Compose)
+
+```sh
+docker-compose up --build
+```
+
+This will start all services: backend (Django), AI node (FastAPI), PostgreSQL, MinIO, and frontend.
+
+Access the services at:
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:8000/api/
+- AI Node: http://localhost:9000
+- MinIO Console: http://localhost:9001
+
+## 4. Manual Local Development (Optional)
+
+If you want to run services individually (for debugging or development):
+
+### Backend (Django)
+```sh
+cd backend
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
+```
+
+### AI Node (FastAPI)
+```sh
+cd ai_node
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python api.py
+```
+
+### Frontend (React/Ionic)
+```sh
+cd frontend
+npm install
+npm run dev
+```
+
+## 5. Production Deployment
+
+- Set strong secrets and production environment variables in `.env` files.
+- Use Docker Compose or orchestrate containers with Kubernetes for scaling.
+- Set up HTTPS (TLS) termination (e.g., with Nginx, Caddy, or a cloud load balancer).
+- Configure persistent storage for PostgreSQL and MinIO volumes.
+- Monitor logs and health endpoints for all services.
+
+## 6. Additional Notes
+
+- For Windows users, run all commands in PowerShell or Git Bash. For macOS/Linux, use Terminal.
+- If you encounter port conflicts, adjust the ports in `docker-compose.yml`.
+- For GPU acceleration (optional, for AI node), use a CUDA-enabled Docker image and compatible hardware.
+- See `backend_testing.md` for API testing instructions.
+
+---
+
+For troubleshooting or advanced configuration, refer to the README or open an issue on GitHub.
+
