@@ -57,7 +57,7 @@ TheDrive is a privacy-first cloud storage platform that combines end-to-end encr
 
 TheDrive follows a three-tier architecture that separates concerns between client-side encryption, zero-knowledge storage, and AI processing. The system ensures that sensitive operations are performed on trusted clients while maintaining privacy through cryptographic verification.
 
-![Overall System Architecture](0_OverallArch.png)
+![Overall System Architecture](0_OverallArch (1).png)
 
 The architecture consists of:
 
@@ -69,7 +69,7 @@ The architecture consists of:
 
 User identity in TheDrive is based on self-sovereign cryptographic keys derived from BIP39 seed phrases. This approach eliminates the need for traditional username/password combinations while providing secure recovery mechanisms.
 
-![Registration and Login Flow](1_Reg&Login.png)
+![Registration and Login Flow](1_Reg&Login (1).png)
 
 **Registration Process:**
 1. Client generates a 12-word BIP39 seed phrase using cryptographically secure randomness
@@ -107,7 +107,7 @@ Seed Phrase (12 words)
 
 Each file uploaded to TheDrive is encrypted with a unique AES-256-GCM key before transmission to the backend. This approach ensures that even if one file's encryption is compromised, other files remain secure.
 
-![File Upload and Storage Flow](2_FileUpload&Storage.png)
+![File Upload and Storage Flow](2_FileUpload&Storage (1).png)
 
 ### File Upload Process
 
@@ -165,7 +165,7 @@ Each file uploaded to TheDrive is encrypted with a unique AES-256-GCM key before
 
 The AI Node operates as an independent FastAPI service that processes user-authorized documents for search and chat capabilities. It maintains its own cryptographic identity and encrypts all processed data before storage.
 
-![AI Ingestion Pipeline](3_Ingestion.png)
+![AI Ingestion Pipeline](3_Ingestion (1).png)
 
 ### AI Node Identity and Authentication
 
@@ -225,7 +225,7 @@ The AI Node operates as an independent FastAPI service that processes user-autho
 
 The chat functionality provides real-time question-answering capabilities over user-selected documents through session-based vector search and LLM processing.
 
-![Chat Session Flow](4_ChatSession.png)
+![Chat Session Flow](4_ChatSession (1).png)
 
 ### Session Lifecycle Management
 
