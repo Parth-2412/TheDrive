@@ -1,6 +1,15 @@
 version: '3.8'
 
 services:
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_BACKEND_URL=${BACKEND_URL:-http://localhost:8000}
+        - VITE_AI_NODE_URL=${AI_NODE_URL:-http://localhost:5001}
+        - VITE_API_FILES_BASE_URL=${API_FILES_BASE_URL:-http://localhost:8000/api/files}
+    restart: always
   backend:
     build: ./backend
     volumes:

@@ -31,7 +31,8 @@ ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
     '0.0.0.0',
-    '[::1]',  # For IPv6 localhost
+    '[::1]'
+    '34.171.86.151',  # For IPv6 localhost
 ]
 
 # Application definition

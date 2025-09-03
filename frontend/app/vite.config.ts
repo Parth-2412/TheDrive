@@ -15,6 +15,15 @@ export default defineConfig({
       '@cubone/react-file-manager': path.resolve(__dirname, '../react-file-manager/src'),
     },
   },
+  server: {
+    proxy: {
+      '/apiv1': {
+        target: process.env.VITE_BACKEND_URL || 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/apiv1/, '/api')
+      }
+    }
+  },
   test: {
     globals: true,
     environment: 'jsdom',
