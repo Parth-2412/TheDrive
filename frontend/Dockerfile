@@ -2,8 +2,8 @@
 FROM node:22-alpine as base
 
 # Set working directory
-COPY . .
 WORKDIR /app
+COPY . .
 CMD ["ls"]
 # Install all dependencies
 RUN npm install
