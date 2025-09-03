@@ -433,7 +433,7 @@ const Manager = () => {
       // Process files one by one (only /ingest)
       for (let i = 0; i < selectedFiles.length; i++) {
         const file = selectedFiles[i];
-        
+        console.log(i)
         try {
           // Update progress
           setProcessingFiles({
@@ -492,8 +492,6 @@ const Manager = () => {
             position: 'bottom'
           });
           
-          // Stop processing remaining files if one fails
-          break;
         }
       }
 
@@ -701,6 +699,29 @@ const Manager = () => {
       setSearchQuery('');
     // }
   }
+  const handleDelete = async (selectedFiles : (IFile|IFolder)[]) => {
+    const allFiles = checkAllFilesSame(selectedFiles);
+    try {
+      if(allFiles){
+        await axiosInstance.delete(`/api/files/bulk_delete/`, {data: {file_ids : selectedFiles.map(f => f.id)}});
+      }
+      else {
+        await Promise.all(selectedFiles.map(file => {
+          if(file.isDirectory){
+            return axiosInstance.delete(`/api/folders/${file.id}/`)
+          }
+          else {
+            return axiosInstance.delete(`/api/files/${file.id}/`)
+          }
+        }))
+      }
+      setFiles(currFiles => currFiles.filter(f => !selectedFiles.some(sf => sf.id == f.id)))
+    }
+    catch (error) {
+      console.error("Error deleting files:", error);
+      present(showError());
+    }
+  }
   return (
     <>
         <FileManager
@@ -727,7 +748,7 @@ const Manager = () => {
           onDownload={handleDownload}
           filePreviewPath={import.meta.env.VITE_API_FILES_BASE_URL}
           onDecryption={handleDecryption}
-          height="100vh"
+          height="20vh"
           onRefresh={handleRefresh}
           onFileOpen={(file : IFile) => {
             setNavState({...navState, currentFileOpened : file})
@@ -806,6 +827,7 @@ const Manager = () => {
           </div>
         )}
     </>
+      
   );
 };
 

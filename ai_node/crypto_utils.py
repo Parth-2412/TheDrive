@@ -83,6 +83,10 @@ def decrypt_input_bytes(encrypted_input_base64: str, master_aes_key: bytes, *, a
     tag = combined[-GCM_TAG_LEN:]
     ciphertext = combined[GCM_IV_LEN:-GCM_TAG_LEN]
 
+    print("============================", iv)
+    print("============================", tag)
+    print("============================", ciphertext)
+
     cipher = Cipher(algorithms.AES(master_aes_key), modes.GCM(iv, tag), backend=default_backend())
     decryptor = cipher.decryptor()
     if aad:

@@ -36,7 +36,7 @@ const sortFiles = (items, sortKey = 'name', direction = 'asc') => {
     return direction === 'asc' ? comparison : -comparison;
   };
 
-  // Sort folders and files separately with deep copy to ensure mutability
+  // Sort folders and files separately
   const sortedFolders = [...folders].map(folder => ({ ...folder })).sort(sortFunction);
   const sortedFiles = [...files].map(file => ({ ...file })).sort(sortFunction);
 

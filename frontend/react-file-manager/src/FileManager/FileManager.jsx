@@ -32,7 +32,7 @@ const FileManager = ({
   onPaste,
   onRename,
   onDownload,
-  onDelete = () => null,
+  onDelete,
   onLayoutChange = () => {},
   onRefresh,
   onFileOpen,

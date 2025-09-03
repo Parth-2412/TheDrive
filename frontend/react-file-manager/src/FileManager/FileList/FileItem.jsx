@@ -10,7 +10,7 @@ import { useSelection } from "../../contexts/SelectionContext";
 import { useClipBoard } from "../../contexts/ClipboardContext";
 import { useLayout } from "../../contexts/LayoutContext";
 import Checkbox from "../../components/Checkbox/Checkbox";
-import { TbSparkles } from "react-icons/tb"; // 👈 AI marker icon
+import { TbSparkles } from "react-icons/tb";
 
 const dragIconSize = 50;
 
@@ -212,11 +212,11 @@ const FileItem = ({
             )
           )}
 
-          {ai_enabled && (
+          {/* {ai_enabled && (
             <span className="ai-mark">
               <TbSparkles size={10} />
             </span>
-          )}
+          )} */}
         </div>
 
         {file.isEditing ? (
@@ -238,7 +238,8 @@ const FileItem = ({
             )}
           </div>
         ) : (
-          <span className="text-truncate file-name">{file.name}</span>
+          <span className="text-truncate file-name">{ai_enabled ? <TbSparkles style={{ marginRight: "10px", color: "#3c3091" }} title="This file is AI enabled" size={20}/> : ""}{file.name} </span>
+
         )}
       </div>
 
