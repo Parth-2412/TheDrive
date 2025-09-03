@@ -1,0 +1,23 @@
+.ai-mode-container {
+    padding: 20px;
+    text-align: center;
+  
+    h3 {
+      color: #5a2de2;
+    }
+  
+    .ai-button {
+      background-color: #5a2de2;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 15px;
+      transition: background-color 0.2s;
+  
+      &:hover {
+        background-color: #4824b5;
+      }
+    }
+  }

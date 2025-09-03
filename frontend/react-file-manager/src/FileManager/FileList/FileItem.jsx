@@ -10,6 +10,7 @@ import { useSelection } from "../../contexts/SelectionContext";
 import { useClipBoard } from "../../contexts/ClipboardContext";
 import { useLayout } from "../../contexts/LayoutContext";
 import Checkbox from "../../components/Checkbox/Checkbox";
+import { TbSparkles } from "react-icons/tb";
 
 const dragIconSize = 50;
 
@@ -42,6 +43,8 @@ const FileItem = ({
   const dragIconRef = useRef(null);
   const dragIcons = useFileIcons(dragIconSize);
 
+  // const isAiActive = file.isAiActive; 
+  const ai_enabled = file.ai_enabled;
   const isFileMoving =
     clipBoard?.isMoving &&
     clipBoard.files.find((f) => f.name === file.name && f.path === file.path);
@@ -63,7 +66,6 @@ const FileItem = ({
       let startRange = selectedFileIndexes[0];
       let endRange = index;
 
-      // Reverse Selection
       if (startRange >= endRange) {
         const temp = startRange;
         startRange = endRange;
@@ -74,7 +76,6 @@ const FileItem = ({
       const filesRange = currentPathFiles.slice(startRange, endRange + 1);
       setSelectedFiles(reverseSelection ? filesRange.reverse() : filesRange);
     } else if (selectedFileIndexes.length > 0 && ctrlKey) {
-      // Remove file from selected files if it already exists on CTRL + Click, otherwise push it in selectedFiles
       setSelectedFiles((prev) => {
         const filteredFiles = prev.filter((f) => f.path !== file.path);
         if (prev.length === filteredFiles.length) {
@@ -90,9 +91,7 @@ const FileItem = ({
   const handleFileSelection = (e) => {
     e.stopPropagation();
     if (file.isEditing) return;
-
     handleFileRangeSelection(e.shiftKey, e.ctrlKey);
-
     const currentTime = new Date().getTime();
     if (currentTime - lastClickTime < 300) {
       handleFileAccess();
@@ -112,25 +111,16 @@ const FileItem = ({
   const handleItemContextMenu = (e) => {
     e.stopPropagation();
     e.preventDefault();
-
     if (file.isEditing) return;
-
     if (!fileSelected) {
       setSelectedFiles([file]);
     }
-
     setLastSelectedFile(file);
     handleContextMenu(e, true);
   };
 
-  // Selection Checkbox Functions
-  const handleMouseOver = () => {
-    setCheckboxClassName("visible");
-  };
-
-  const handleMouseLeave = () => {
-    !fileSelected && setCheckboxClassName("hidden");
-  };
+  const handleMouseOver = () => setCheckboxClassName("visible");
+  const handleMouseLeave = () => !fileSelected && setCheckboxClassName("hidden");
 
   const handleCheckboxChange = (e) => {
     if (e.target.checked) {
@@ -138,10 +128,8 @@ const FileItem = ({
     } else {
       setSelectedFiles((prev) => prev.filter((f) => f.name !== file.name && f.path !== file.path));
     }
-
     setFileSelected(e.target.checked);
   };
-  //
 
   const handleDragStart = (e) => {
     e.dataTransfer.setDragImage(dragIconRef.current, 30, 50);
@@ -163,7 +151,6 @@ const FileItem = ({
   };
 
   const handleDragLeave = (e) => {
-    // To stay in dragging state for the child elements of the target drop-zone
     if (!e.currentTarget.contains(e.relatedTarget)) {
       setDropZoneClass((prev) => (prev ? "" : prev));
       setTooltipPosition(null);
@@ -173,7 +160,6 @@ const FileItem = ({
   const handleDrop = (e) => {
     e.preventDefault();
     if (fileSelected || !file.isDirectory) return;
-
     handlePasting(file);
     setDropZoneClass((prev) => (prev ? "" : prev));
     setTooltipPosition(null);
@@ -215,13 +201,23 @@ const FileItem = ({
             onClick={(e) => e.stopPropagation()}
           />
         )}
-        {file.isDirectory ? (
-          <FaRegFolderOpen size={iconSize} />
-        ) : (
-          <>
-            {fileIcons[file.name?.split(".").pop()?.toLowerCase()] ?? <FaRegFile size={iconSize} />}
-          </>
-        )}
+
+        {/* ✅ File/Folder icon with AI marker badge */}
+        <div className="file-icon-wrapper">
+          {file.isDirectory ? (
+            <FaRegFolderOpen size={iconSize} />
+          ) : (
+            fileIcons[file.name?.split(".").pop()?.toLowerCase()] ?? (
+              <FaRegFile size={iconSize} />
+            )
+          )}
+
+          {/* {ai_enabled && (
+            <span className="ai-mark">
+              <TbSparkles size={10} />
+            </span>
+          )} */}
+        </div>
 
         {file.isEditing ? (
           <div className={`rename-file-container ${activeLayout}`}>
@@ -242,7 +238,8 @@ const FileItem = ({
             )}
           </div>
         ) : (
-          <span className="text-truncate file-name">{file.name}</span>
+          <span className="text-truncate file-name">{ai_enabled ? <TbSparkles style={{ marginRight: "10px", color: "#3c3091" }} title="This file is AI enabled" size={20}/> : ""}{file.name} </span>
+
         )}
       </div>
 
@@ -252,8 +249,7 @@ const FileItem = ({
           <div className="size">{file?.size > 0 ? getDataSize(file?.size) : ""}</div>
         </>
       )}
-
-      {/* Drag Icon & Tooltip Setup */}
+      
       {tooltipPosition && (
         <div
           style={{
@@ -265,7 +261,7 @@ const FileItem = ({
           Move to <span className="drop-zone-file-name">{file.name}</span>
         </div>
       )}
-
+      
       <div ref={dragIconRef} className="drag-icon">
         {file.isDirectory ? (
           <FaRegFolderOpen size={dragIconSize} />
@@ -277,7 +273,6 @@ const FileItem = ({
           </>
         )}
       </div>
-      {/* Drag Icon & Tooltip Setup */}
     </div>
   );
 };

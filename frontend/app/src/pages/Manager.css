@@ -1,5 +1,5 @@
 .bread-crumb-container .breadcrumb {
-    --breadcrumb-height : 48px;
+    --breadcrumb-height : 50px;
     height: var(--breadcrumb-height) !important;
     min-height: var(--breadcrumb-height) !important;
     max-height: var(--breadcrumb-height) !important;
@@ -13,6 +13,82 @@
 
 }
 
+.file-explorer {
+    height: 100vh !important;
+    scrollbar-width: none !important;
+}
 .folders-preview {
     width : 100% !important;
+}
+
+.fm-modal {
+    width: 80% !important;
+}
+
+.file-explorer:-webkit-scrollbar {
+  display: none;          /* for Chrome, Safari, Edge */
+}
+
+.toolbar {
+    min-height: 50px !important;
+    max-height: none !important;
+    height: auto !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.file-action-container {
+    margin: auto;
+    width: 100%;
+}
+.fm-toolbar {
+    margin: auto;
+    width: 100%;
+}
+
+.file-action-container > :first-child  {
+    overflow-x: scroll;
+    scrollbar-width: none;
+}
+.fm-toolbar > :first-child  {
+    overflow-x: scroll;
+    scrollbar-width: none;
+}
+
+.file-action-container > :first-child:-webkit-scrollbar {
+  display: none;          /* for Chrome, Safari, Edge */
+}
+
+.fm-toolbar > :first-child:-webkit-scrollbar {
+  display: none;          /* for Chrome, Safari, Edge */
+}
+
+.file-action-container > :first-child > button  {
+    white-space: nowrap;
+}
+.fm-toolbar > :first-child > button  {
+    white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+    .file-explorer {
+        width: calc(100% - max(var(--side-min-width), var(--side-max-width))) !important;
+    }
+}
+
+
+.ant-pro-chat-chat-list-container {
+    height: 100% !important;
+}
+/* AI Processing Progress Animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
 }

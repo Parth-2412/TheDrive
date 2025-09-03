@@ -15,22 +15,17 @@ from rest_framework.permissions import AllowAny
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from rest_framework.permissions import AllowAny
 
-
 # 2️⃣ Login Request (request a nonce)
-class LoginRequestSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DriveUser
-        fields = ['username']
-
+class LoginRequestSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    
 # 3️⃣ Nonce Response
 class NonceResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = AuthNonce
         fields = ['nonce', 'challenge_message', 'expires_at']
-class DriveUserRegisterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DriveUser
-        fields = ['username', 'public_key']
+class DriveUserRegisterSerializer(serializers.Serializer):
+    public_key = serializers.CharField()
 
 # 4️⃣ Login Verify Request (send signature)
 class LoginVerifySerializer(serializers.Serializer):
@@ -65,10 +60,13 @@ class AuthenticationViewSet(viewsets.ViewSet):
         POST /auth/register - Register a new user
         """
         data = JSONParser().parse(request)
-        serializer = DriveUserSerializer(data=data)
+
+        serializer = DriveUserRegisterSerializer(data=data)
         if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=201)
+            public_key = serializer.validated_data.get('public_key', None)
+            user = DriveUser.objects.create(username=public_key,public_key=public_key)
+
+            return Response(DriveUserSerializer(user).data, status=201)
         return Response(serializer.errors, status=400)
 
     @extend_schema(

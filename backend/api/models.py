@@ -49,8 +49,6 @@ class DriveUser(AbstractBaseUser, PermissionsMixin):
         blank=True,
     )
 
-    storage_used = models.BigIntegerField(default=0)
-
     created_at = models.DateTimeField(auto_now_add=True)
     last_login = models.DateTimeField(auto_now=True)
 
@@ -81,17 +79,14 @@ class AINode(models.Model):
     # AI node's RSA key pair (generated at build)
     public_key = models.TextField(unique=True, help_text="AI node's ED25519 public key")
     
-    # Network details
-    endpoint_url = models.URLField(help_text="AI node's API endpoint")
-    
     # Authorization and trust
     is_authorized = models.BooleanField(
         default=False, 
         help_text="Whether this AI node is authorized by app owners"
     )
     
-    # Stats
-    total_users = models.IntegerField(default=0)
+    own_user_object = models.OneToOneField(DriveUser,null=True, on_delete=models.CASCADE, related_name='ai_node')
+
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -109,31 +104,15 @@ class StorageEntity(models.Model):
     user = models.ForeignKey(DriveUser, on_delete=models.CASCADE)
     
     # Encrypted name (encrypted with parent's key or user's root key)
-    name_encrypted = models.BinaryField()
-
-    
-    # Storage path
-    minio_path = models.TextField()
-    
-    # AI settings
-    ai_enabled = models.BooleanField(default=False)
-    ai_processing_status = models.CharField(
-        max_length=20,
-        choices=[
-            ('pending', 'Pending'),
-            ('processing', 'Processing'),
-            ('completed', 'Completed'),
-            ('failed', 'Failed'),
-        ],
-        default='pending'
-    )
+    name_encrypted = models.TextField()
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         abstract = True
-
+    def __str__(self):
+        return str(self.id)
 
 class Folder(StorageEntity):
     """
@@ -154,21 +133,21 @@ class Folder(StorageEntity):
         related_name='subfolders',
         help_text="Parent folder - null for root folders"
     )
-    
+    folder_name_hash = models.CharField(
+        max_length=64, 
+        help_text="SHA-256 hash of encrypted file for integrity"
+    )
     class Meta:
         db_table = 'folders'
         indexes = [
             models.Index(fields=['user', 'parent']),
-            models.Index(fields=['user', 'ai_enabled']),
         ]
+        unique_together = [('parent', 'folder_name_hash')]
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Set help text for inherited fields
         self._meta.get_field('name_encrypted').help_text = "Folder name encrypted with drive mastery key"
-        self._meta.get_field('minio_path').help_text = "Full folder path for fast hierarchical queries"
-        self._meta.get_field('ai_enabled').help_text = "Whether files in this folder are AI-searchable"
-
 
 class File(StorageEntity):
     """
@@ -182,37 +161,45 @@ class File(StorageEntity):
     )
     
     # File belongs to a folder
-    folder = models.ForeignKey(Folder, on_delete=models.CASCADE, related_name='files')
+    folder = models.ForeignKey(Folder, on_delete=models.CASCADE, related_name='files', null=True)
     
     # File-specific fields
     file_size = models.BigIntegerField(help_text="File size in bytes")
-    file_type = models.CharField(max_length=10, help_text="File type/extension")
     
     # Additional AI processing field for files
     ai_processed_at = models.DateTimeField(null=True, blank=True)
-    
+    page_number = models.PositiveIntegerField(null=True, blank=True)
     # Checksums for integrity
     file_hash = models.CharField(
         max_length=64, 
         help_text="SHA-256 hash of encrypted file for integrity"
     )
+    file_name_hash = models.CharField(
+        max_length=64, 
+        help_text="SHA-256 hash of encrypted file for integrity"
+    )
     
     # File's own encryption key (user's master key)
-    key_encrypted = models.BinaryField(help_text = "This file's symmetric key encrypted with the drive master key")
+    key_encrypted = models.TextField(help_text = "This file's symmetric key encrypted with the drive master key, in base64 format")
+    file_iv = models.TextField(help_text = "In base64")
+    key_encrypted_iv = models.TextField(help_text = "In base64")
+    ai_enabled = models.BooleanField(default=False,help_text = "Whether this file is AI-searchable")
+
     class Meta:
         db_table = 'files'
         indexes = [
             models.Index(fields=['user', 'folder']),
             models.Index(fields=['user', 'ai_enabled']),
-            models.Index(fields=['ai_processing_status']),
         ]
+        unique_together = [('folder', 'name_encrypted')]
+
+        unique_together = [('folder', 'file_name_hash')]
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Set help text for inherited fields
         self._meta.get_field('name_encrypted').help_text = "Original filename encrypted with drive master key"
-        self._meta.get_field('minio_path').help_text = "Path in MinIO object storage"
-        self._meta.get_field('ai_enabled').help_text = "Whether this file is AI-searchable"
+
     
 class DocumentChunk(models.Model):
     """
@@ -220,25 +207,27 @@ class DocumentChunk(models.Model):
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     
-    chunk_content_encrypted = models.BinaryField(help_text="Chunk content encrypted by the AI node")
+    chunk_content_encrypted = models.TextField(help_text="Chunk content encrypted by the AI node")
     
     order_in_file = models.PositiveBigIntegerField(help_text="Order of the chunk in the file")
+    chunk_start = models.PositiveBigIntegerField(help_text="Chunk start index in the file")
+    chunk_end = models.PositiveBigIntegerField(help_text="Chunk end index in the file")
 
     # the file it belongs to
     file = models.ForeignKey(File, on_delete=models.CASCADE, help_text="The file the chunk belongs to")
 
     # Encrypted embedding vector (encrypted with AI node's public key)
-    embedding_encrypted = models.BinaryField(help_text="Vector embedding encrypted by the AI node")
+    embedding_encrypted = models.TextField(help_text="Vector embedding encrypted by the AI node")
     
     # Embedding metadata
     ai_node = models.ForeignKey(AINode, on_delete=models.CASCADE)
 
-    embedding_dimension = models.IntegerField(help_text="Vector dimension")
+
     
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
-        db_table = 'document_chunk'
+        db_table = 'document_chunks'
         indexes = []
 
 class AuthNonce(models.Model):

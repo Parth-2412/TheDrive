@@ -19,6 +19,11 @@ const Actions = ({
   acceptedFileTypes,
   triggerAction,
   permissions,
+  masterAesKey,
+  onFileUpload,
+  onDownload,
+  onDecryption,
+  onModalClose
 }) => {
   const [activeAction, setActiveAction] = useState(null);
   const { selectedFiles } = useSelection();
@@ -37,6 +42,7 @@ const Actions = ({
           acceptedFileTypes={acceptedFileTypes}
           onFileUploading={onFileUploading}
           onFileUploaded={onFileUploaded}
+          onFileUpload={onFileUpload}
         />
       ),
       width: "35%",
@@ -52,6 +58,8 @@ const Actions = ({
         <PreviewFileAction
           filePreviewPath={filePreviewPath}
           filePreviewComponent={filePreviewComponent}
+          onDownload={onDownload}
+          onDecryption={onDecryption}
         />
       ),
       width: "50%",
@@ -73,10 +81,12 @@ const Actions = ({
   if (activeAction) {
     return (
       <Modal
+      
         heading={activeAction.title}
         show={triggerAction.isActive}
         setShow={triggerAction.close}
         dialogWidth={activeAction.width}
+        onModalClose={onModalClose}
       >
         {activeAction?.component}
       </Modal>

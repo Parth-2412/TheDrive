@@ -9,6 +9,9 @@ import { FaRegCheckCircle } from "react-icons/fa";
 import { IoMdRefresh } from "react-icons/io";
 import { useFiles } from "../../../contexts/FilesContext";
 import { useTranslation } from "../../../contexts/TranslationProvider";
+import axiosInstance from "../../../../../app/src/services/api.service"; // Import your Axios instance
+import encryptFile from '../../../../../app/src/services/encrypt.service';
+import { useFileNavigation } from "../../../contexts/FileNavigationContext";
 
 const UploadItem = ({
   index,
@@ -18,38 +21,35 @@ const UploadItem = ({
   fileUploadConfig,
   onFileUploaded,
   handleFileRemove,
+
+  onFileUpload // New prop to handle file upload outside this component
 }) => {
+  const { currentFolder } = useFileNavigation()
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploaded, setIsUploaded] = useState(false);
   const [isCanceled, setIsCanceled] = useState(false);
   const [uploadFailed, setUploadFailed] = useState(false);
   const fileIcons = useFileIcons(33);
-  const xhrRef = useRef();
   const { onError } = useFiles();
   const t = useTranslation();
-
-  const handleUploadError = (xhr) => {
+  const handleUploadError = (error) => {
     setUploadProgress(0);
     setIsUploading((prev) => ({
       ...prev,
       [index]: false,
     }));
-    const error = {
+    const errorMessage = {
       type: "upload",
       message: t("uploadFail"),
-      response: {
-        status: xhr.status,
-        statusText: xhr.statusText,
-        data: xhr.response,
-      },
+      error: error,
     };
-
+    console.log(errorMessage)
     setFiles((prev) =>
       prev.map((file, i) => {
         if (index === i) {
           return {
             ...file,
-            error: error.message,
+            error: errorMessage.message,
           };
         }
         return file;
@@ -57,83 +57,49 @@ const UploadItem = ({
     );
 
     setUploadFailed(true);
-
-    onError(error, fileData.file);
+    onError(errorMessage, fileData.file);
   };
 
-  const fileUpload = (fileData) => {
+  const fileUpload = async (fileData) => {
     if (!!fileData.error) return;
 
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhrRef.current = xhr;
-      setIsUploading((prev) => ({
-        ...prev,
-        [index]: true,
-      }));
+    setIsUploading((prev) => ({
+      ...prev,
+      [index]: true,
+    }));
+    try {
 
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const progress = Math.round((event.loaded / event.total) * 100);
-          setUploadProgress(progress);
-        }
-      };
-
-      xhr.onload = () => {
-        setIsUploading((prev) => ({
-          ...prev,
-          [index]: false,
-        }));
-        if (xhr.status === 200 || xhr.status === 201) {
-          setIsUploaded(true);
-          onFileUploaded(xhr.response);
-          resolve(xhr.response);
-        } else {
-          reject(xhr.statusText);
-          handleUploadError(xhr);
-        }
-      };
-
-      xhr.onerror = () => {
-        reject(xhr.statusText);
-        handleUploadError(xhr);
-      };
-
-      const method = fileUploadConfig?.method || "POST";
-      xhr.open(method, fileUploadConfig?.url, true);
-      const headers = fileUploadConfig?.headers;
-      for (let key in headers) {
-        xhr.setRequestHeader(key, headers[key]);
-      }
-
-      const formData = new FormData();
-      const appendData = fileData?.appendData;
-      for (let key in appendData) {
-        appendData[key] && formData.append(key, appendData[key]);
-      }
-      formData.append("file", fileData.file);
-
-      xhr.send(formData);
-    });
-  };
-
-  useEffect(() => {
-    // Prevent double uploads with strict mode
-    if (!xhrRef.current) {
-      fileUpload(fileData);
-    }
-  }, []);
-
-  const handleAbortUpload = () => {
-    if (xhrRef.current) {
-      xhrRef.current.abort();
+      await onFileUpload(fileData, currentFolder)
+      setIsUploaded(true);
       setIsUploading((prev) => ({
         ...prev,
         [index]: false,
       }));
-      setIsCanceled(true);
-      setUploadProgress(0);
     }
+    catch(error){
+      setIsUploading((prev) => ({
+        ...prev,
+        [index]: false,
+      }));
+      handleUploadError(error);
+    }
+    // Encrypt the file and send the encrypted data as JSON payload
+    
+      
+  };
+
+  useEffect(() => {
+    fileUpload(fileData,currentFolder)
+  }, []);
+
+  const handleAbortUpload = () => {
+    // Handle cancel logic if needed
+    setIsUploading((prev) => ({
+      ...prev,
+      [index]: false,
+    }));
+    setIsCanceled(true);
+    setUploadProgress(0);
   };
 
   const handleRetry = () => {
@@ -155,11 +121,10 @@ const UploadItem = ({
     }
   };
 
-  // File was removed by the user beacuse it was unsupported or exceeds file size limit.
+  // File was removed by the user because it was unsupported or exceeds file size limit.
   if (!!fileData.removed) {
     return null;
   }
-  //
 
   return (
     <li>
@@ -188,12 +153,7 @@ const UploadItem = ({
             </div>
           )}
         </div>
-        <Progress
-          percent={uploadProgress}
-          isCanceled={isCanceled}
-          isCompleted={isUploaded}
-          error={fileData.error}
-        />
+        
       </div>
     </li>
   );

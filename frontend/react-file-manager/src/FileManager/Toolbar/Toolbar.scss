@@ -6,6 +6,7 @@
   max-height: 35px;
   border-bottom: 1px solid $border-color;
   padding: 5px 10px;
+  font-family: $font-family-base;
 
   .file-action-container {
     display: flex;
@@ -131,6 +132,114 @@
     background: $border-color;
     width: 1px;
     margin: 0 5px;
+  }
+
+  .search-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin-left: 10px;
+    background: white;
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+    padding: 0;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+
+    &:hover {
+      border-color: #c7d2fe;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    }
+
+    &:focus-within {
+      border-color: var(--file-manager-primary-color, #667eea);
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 10px;
+      color: #9ca3af;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .search-input {
+      border: none;
+      outline: none;
+      padding: 8px 40px 8px 36px;
+      font-size: 14px;
+      font-family: $font-family-base;
+      font-weight: 400;
+      background: transparent;
+      width: 150px;
+      color: #374151;
+      border-radius: 6px;
+      transition: width 0.3s ease;
+
+      &::placeholder {
+        color: #9ca3af;
+        font-size: 13px;
+      }
+
+      &:focus {
+        width: 200px;
+        transition: width 0.3s ease;
+      }
+
+      @media (max-width: 768px) {
+        width: 150px;
+        
+        &:focus {
+          width: 180px;
+        }
+      }
+
+      @media (max-width: 480px) {
+        width: 120px;
+        font-size: 13px;
+        padding: 6px 32px 6px 32px;
+        
+        &:focus {
+          width: 140px;
+        }
+      }
+    }
+
+    .search-clear {
+      position: absolute;
+      right: 8px;
+      background: none;
+      border: none;
+      color: #9ca3af;
+      cursor: pointer;
+      padding: 2px;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+
+      &:hover {
+        color: #6b7280;
+        background: #f3f4f6;
+      }
+
+      &:focus {
+        outline: none;
+        color: #374151;
+        background: #e5e7eb;
+      }
+    }
+
+    @media (max-width: 480px) {
+      margin-left: 5px;
+      
+      .search-icon {
+        left: 8px;
+        font-size: 14px;
+      }
+    }
   }
 }
 

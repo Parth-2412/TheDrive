@@ -5,7 +5,7 @@ import BreadCrumb from "./BreadCrumb/BreadCrumb";
 import FileList from "./FileList/FileList";
 import Actions from "./Actions/Actions";
 import { FilesProvider } from "../contexts/FilesContext";
-import { FileNavigationProvider } from "../contexts/FileNavigationContext";
+import { FileNavigationProvider, useFileNavigation } from "../contexts/FileNavigationContext";
 import { SelectionProvider } from "../contexts/SelectionContext";
 import { ClipBoardProvider } from "../contexts/ClipboardContext";
 import { LayoutProvider } from "../contexts/LayoutContext";
@@ -14,7 +14,7 @@ import { useColumnResize } from "../hooks/useColumnResize";
 import PropTypes from "prop-types";
 import { dateStringValidator, urlValidator } from "../validators/propValidators";
 import { TranslationProvider } from "../contexts/TranslationProvider";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { defaultPermissions } from "../constants";
 import "./FileManager.scss";
 
@@ -22,18 +22,20 @@ const FileManager = ({
   files,
   fileUploadConfig,
   isLoading,
+  onNavChange,
   onCreateFolder,
   onFileUploading = () => {},
   onFileUploaded = () => {},
+  onFileUpload = () => {},
   onCut,
   onCopy,
   onPaste,
   onRename,
   onDownload,
-  onDelete = () => null,
+  onDelete,
   onLayoutChange = () => {},
   onRefresh,
-  onFileOpen = () => {},
+  onFileOpen,
   onFolderChange = () => {},
   onSelect,
   onError = () => {},
@@ -52,6 +54,12 @@ const FileManager = ({
   permissions: userPermissions = {},
   collapsibleNav = false,
   defaultNavExpanded = true,
+  masterAesKey,
+  onAiModeChange,
+  onDecryption,
+  searchValue,
+  setSearchValue,
+  onModalClose
 }) => {
   const [isNavigationPaneOpen, setNavigationPaneOpen] = useState(defaultNavExpanded);
   const triggerAction = useTriggerAction();
@@ -63,7 +71,7 @@ const FileManager = ({
     height,
     width,
   };
-
+  
   const permissions = useMemo(
     () => ({ ...defaultPermissions, ...userPermissions }),
     [userPermissions]
@@ -83,6 +91,10 @@ const FileManager = ({
                     onRefresh={onRefresh}
                     triggerAction={triggerAction}
                     permissions={permissions}
+                    onNavChange={onNavChange}
+                    onAiModeChange={onAiModeChange}
+                    searchValue={searchValue}
+                    setSearchValue={setSearchValue}
                   />
                   <section
                     ref={containerRef}
@@ -120,6 +132,9 @@ const FileManager = ({
                         enableFilePreview={enableFilePreview}
                         triggerAction={triggerAction}
                         permissions={permissions}
+                        onAiModeChange={onAiModeChange}
+                        filteredFiles={files}
+                        searchValue={searchValue}
                       />
                     </div>
                   </section>
@@ -136,6 +151,10 @@ const FileManager = ({
                     acceptedFileTypes={acceptedFileTypes}
                     triggerAction={triggerAction}
                     permissions={permissions}
+                    onFileUpload={onFileUpload}
+                    onDownload={onDownload}
+                    onDecryption={onDecryption}
+                    onModalClose={onModalClose}
                   />
                 </LayoutProvider>
               </ClipBoardProvider>

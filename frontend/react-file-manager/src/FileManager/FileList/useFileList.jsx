@@ -1,6 +1,6 @@
 import { BiRename, BiSelectMultiple } from "react-icons/bi";
 import { BsCopy, BsFolderPlus, BsGrid, BsScissors } from "react-icons/bs";
-import { FaListUl, FaRegFile, FaRegPaste } from "react-icons/fa6";
+import { FaBan, FaListUl, FaRegFile, FaRegPaste } from "react-icons/fa6";
 import { FiRefreshCw } from "react-icons/fi";
 import { MdOutlineDelete, MdOutlineFileDownload, MdOutlineFileUpload } from "react-icons/md";
 import { PiFolderOpen } from "react-icons/pi";
@@ -12,8 +12,10 @@ import { useFileNavigation } from "../../contexts/FileNavigationContext";
 import { duplicateNameHandler } from "../../utils/duplicateNameHandler";
 import { validateApiCallback } from "../../utils/validateApiCallback";
 import { useTranslation } from "../../contexts/TranslationProvider";
+import { TbSparkles } from "react-icons/tb";
+import { getActions } from "../../utils/checkAllFilesSame";
 
-const useFileList = (onRefresh, enableFilePreview, triggerAction, permissions, onFileOpen) => {
+const useFileList = (onRefresh, enableFilePreview, triggerAction, permissions, onFileOpen, onAiModeChange) => {
   const [selectedFileIndexes, setSelectedFileIndexes] = useState([]);
   const [visible, setVisible] = useState(false);
   const [isSelectionCtx, setIsSelectionCtx] = useState(false);
@@ -22,7 +24,7 @@ const useFileList = (onRefresh, enableFilePreview, triggerAction, permissions, o
 
   const { clipBoard, setClipBoard, handleCutCopy, handlePasting } = useClipBoard();
   const { selectedFiles, setSelectedFiles, handleDownload } = useSelection();
-  const { currentPath, setCurrentPath, currentPathFiles, setCurrentPathFiles, onFolderChange } =
+  const { currentPath, setCurrentPath, currentPathFiles, setCurrentPathFiles, onFolderChange, currentFolder } =
     useFileNavigation();
   const { activeLayout, setActiveLayout } = useLayout();
   const t = useTranslation();
@@ -65,6 +67,13 @@ const useFileList = (onRefresh, enableFilePreview, triggerAction, permissions, o
     setVisible(false);
     triggerAction.show("delete");
   };
+
+// In useFileList.jsx
+
+const handleAiModeChange = (value) => {
+  setVisible(false);
+  onAiModeChange(selectedFiles, value);
+};
 
   const handleRefresh = () => {
     setVisible(false);
@@ -138,6 +147,22 @@ const useFileList = (onRefresh, enableFilePreview, triggerAction, permissions, o
       icon: <BiSelectMultiple size={18} />,
       onClick: handleselectAllFiles,
     },
+    {
+      title:  t("Enable AI mode"),
+      icon: <TbSparkles size={18} />,
+      onClick: () => {
+        setVisible(false);
+        onAiModeChange([currentFolder], true)
+      },
+    },
+    {
+      title:  t("Disable AI mode"),
+      icon:  <FaBan size={18} />,
+      onClick: () => {
+        setVisible(false);
+        onAiModeChange([currentFolder], false)
+      },
+    },
   ];
 
   const selecCtxItems = [
@@ -173,8 +198,7 @@ const useFileList = (onRefresh, enableFilePreview, triggerAction, permissions, o
       title: t("rename"),
       icon: <BiRename size={19} />,
       onClick: handleRenaming,
-      hidden: selectedFiles.length > 1,
-      hidden: !permissions.rename,
+      hidden: selectedFiles.length > 1 || !permissions.rename,
     },
     {
       title: t("download"),
@@ -182,15 +206,25 @@ const useFileList = (onRefresh, enableFilePreview, triggerAction, permissions, o
       onClick: handleDownloadItems,
       hidden: !permissions.download,
     },
-    {
+  ];
+  
+  getActions(selectedFiles).map((args) => (
+     selecCtxItems.splice(-2,0,{
+      title: t(args[0]),
+      icon: args[1] ? <TbSparkles size={18} />:  <FaBan size={18} />,
+      onClick: () => handleAiModeChange(args[1]), // 👈 toggle function we defined
+      hidden: false,
+    })
+  ))
+   
+  //`
+
+  selecCtxItems.push({
       title: t("delete"),
       icon: <MdOutlineDelete size={19} />,
       onClick: handleDelete,
       hidden: !permissions.delete,
-    },
-  ];
-  //
-
+    },)
   const handleFolderCreating = () => {
     setCurrentPathFiles((prev) => {
       return [

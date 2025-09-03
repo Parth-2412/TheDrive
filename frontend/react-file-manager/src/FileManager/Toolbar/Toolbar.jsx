@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { BsCopy, BsFolderPlus, BsGridFill, BsScissors } from "react-icons/bs";
-import { FiRefreshCw } from "react-icons/fi";
+import { FiRefreshCw, FiSearch, FiX } from "react-icons/fi";
+import { TbSparkles } from "react-icons/tb"; 
 import {
   MdClear,
   MdOutlineDelete,
@@ -8,7 +9,7 @@ import {
   MdOutlineFileUpload,
 } from "react-icons/md";
 import { BiRename } from "react-icons/bi";
-import { FaListUl, FaRegPaste } from "react-icons/fa6";
+import { FaBan, FaListUl, FaRegPaste, FaRobot } from "react-icons/fa6";
 import LayoutToggler from "./LayoutToggler";
 import { useFileNavigation } from "../../contexts/FileNavigationContext";
 import { useSelection } from "../../contexts/SelectionContext";
@@ -17,15 +18,21 @@ import { useLayout } from "../../contexts/LayoutContext";
 import { validateApiCallback } from "../../utils/validateApiCallback";
 import { useTranslation } from "../../contexts/TranslationProvider";
 import "./Toolbar.scss";
+import { getActions } from "../../utils/checkAllFilesSame";
+import { FaMinusCircle } from "react-icons/fa";
 
-const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions }) => {
+const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions, onNavChange, onAiModeChange, searchValue, setSearchValue }) => {
   const [showToggleViewMenu, setShowToggleViewMenu] = useState(false);
-  const { currentFolder } = useFileNavigation();
+  const navData = useFileNavigation();
   const { selectedFiles, setSelectedFiles, handleDownload } = useSelection();
   const { clipBoard, setClipBoard, handleCutCopy, handlePasting } = useClipBoard();
   const { activeLayout } = useLayout();
   const t = useTranslation();
+  const { currentFolder, setCurrentPathFiles, currentPathFiles } = navData;
 
+  useEffect(() => {
+      onNavChange(navData)
+    }, [navData])
   // Toolbar Items
   const toolbarLeftItems = [
     {
@@ -46,7 +53,20 @@ const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions }) => {
       permission: !!clipBoard,
       onClick: handleFilePasting,
     },
+    {
+      icon: <TbSparkles size={18} />,
+      text: t("Enable AI mode"),
+      onClick: () => onAiModeChange([currentFolder],true),
+      permission: true
+    },
+    {
+      icon: <FaBan  size={18} />,
+      text: t("Disable AI mode"),
+      onClick: () => onAiModeChange([currentFolder],false),
+      permission: true
+    },
   ];
+
 
   const toolbarRightItems = [
     {
@@ -116,6 +136,20 @@ const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions }) => {
                 <span>{t("download")}</span>
               </button>
             )}
+
+          {getActions(selectedFiles).map((args) => (<button
+    className="item-action file-action"
+    key={args[0]}
+    onClick={() => {
+    onAiModeChange(selectedFiles,args[1]);  // Pass the updated file to parent
+  }}
+  >
+    {args[1] ? <TbSparkles size={18} /> : <FaBan size={18} />}
+    <span>
+      {t(args[0])}
+    </span>
+  </button>))}
+
             {permissions.delete && (
               <button
                 className="item-action file-action"
@@ -157,6 +191,28 @@ const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions }) => {
             ))}
         </div>
         <div>
+
+          <div className="search-container">
+            <FiSearch className="search-icon" size={16} />
+            <input 
+              name="search" 
+              type="text" 
+              placeholder={"Search files..."} 
+              className="search-input"
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              />
+            {searchValue && (
+              <button 
+              className="search-clear" 
+              onClick={() => setSearchValue("")}
+              title="Clear search"
+              >
+                <FiX size={16} />
+              </button>
+            )}
+          </div>
+
           {toolbarRightItems.map((item, index) => (
             <div key={index} className="toolbar-left-items">
               <button className="item-action icon-only" title={item.title} onClick={item.onClick}>
@@ -165,11 +221,10 @@ const Toolbar = ({ onLayoutChange, onRefresh, triggerAction, permissions }) => {
               {index !== toolbarRightItems.length - 1 && <div className="item-separator"></div>}
             </div>
           ))}
-
           {showToggleViewMenu && (
             <LayoutToggler
-              setShowToggleViewMenu={setShowToggleViewMenu}
-              onLayoutChange={onLayoutChange}
+            setShowToggleViewMenu={setShowToggleViewMenu}
+            onLayoutChange={onLayoutChange}
             />
           )}
         </div>

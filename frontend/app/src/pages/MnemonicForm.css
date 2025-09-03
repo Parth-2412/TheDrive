@@ -1,0 +1,84 @@
+.mnemonic-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background-color: #f4f4f4;  /* Light background */
+}
+
+.mnemonic-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);  /* 3 columns per row */
+  gap: 20px;
+  margin-top: 30px;
+  width: 100%;
+  margin-bottom: 30px;
+}
+
+.mnemonic-grid ion-input {
+  width: 100% !important;
+  text-align: center !important;
+  font-size: 14px !important;
+  padding: 4px !important;
+  border-radius: 8px !important;
+  border: 1px solid #ccc !important;
+  box-sizing: border-box !important; /* Ensure padding doesn't affect the size */
+}
+
+/* Adjust padding for the rightmost column to fix the border issue */
+.mnemonic-grid ion-input:nth-child(3n) {
+  padding-right: 8px !important;  /* Add extra padding to the right of the rightmost inputs */
+}
+
+/* Ensure input text is centered */
+.mnemonic-grid ion-input::part(input) {
+  text-align: center !important;  /* Center text in the input box */
+  font-size: 16px !important;
+}
+
+.mnemonic-grid ion-input::part(native) {
+  padding: 8px !important;  /* Add padding to the input box */
+  font-size: 14px !important;
+  text-align: center !important;
+}
+
+/* Styling for error messages and overall form */
+.mnemonic-container ion-button {
+  margin: 20px 0px;
+  border-radius: 80px !important;
+}
+
+.mnemonic-container ion-item {
+  margin-bottom: 15px !important;
+}
+
+.mnemonic-container ion-text {
+  margin-top: 10px !important;
+}
+
+.placeholder_item {
+  border-radius: 4px !important;
+  border: 0.02px solid #ccc !important;
+  box-sizing: border-box !important; /* Ensure padding doesn't affect the size */
+}
+
+.placeholder {
+  width: 240px;  /* Set the passphrase input width to 60% of the container/grid */
+  margin: 6px auto;  /* Center the passphrase input horizontally */
+  font-size: 14px;
+}
+
+/* Style for the copy button */
+.mnemonic-container ion-button {
+  margin-top: 20px;
+}
+
+.mnemonic-container ion-button ion-icon {
+  margin-right: 8px;
+}
+
+.copy_mnemonic {
+  color: #677a98;
+  font-size: 12px;
+}

@@ -17,6 +17,9 @@ const FileList = ({
   enableFilePreview,
   triggerAction,
   permissions,
+  onAiModeChange,
+  filteredFiles,
+  searchValue
 }) => {
   const { currentPathFiles, sortConfig, setSortConfig } = useFileNavigation();
   const filesViewRef = useRef(null);
@@ -34,7 +37,7 @@ const FileList = ({
     selectedFileIndexes,
     clickPosition,
     isSelectionCtx,
-  } = useFileList(onRefresh, enableFilePreview, triggerAction, permissions, onFileOpen);
+  } = useFileList(onRefresh, enableFilePreview, triggerAction, permissions, onFileOpen, onAiModeChange);
 
   const contextMenuRef = useDetectOutsideClick(() => setVisible(false));
 
@@ -57,7 +60,7 @@ const FileList = ({
         <FilesHeader unselectFiles={unselectFiles} onSort={handleSort} sortConfig={sortConfig} />
       )}
 
-      {currentPathFiles?.length > 0 ? (
+      {!searchValue || filteredFiles.length > 0 ? (currentPathFiles?.length > 0 ? (
         <>
           {currentPathFiles.map((file, index) => (
             <FileItem
@@ -80,7 +83,7 @@ const FileList = ({
         </>
       ) : (
         <div className="empty-folder">{t("folderEmpty")}</div>
-      )}
+      )) : <div className="empty-folder">No files found for given search result.</div>}
 
       <ContextMenu
         filesViewRef={filesViewRef}

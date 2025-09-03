@@ -11,7 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 from datetime import timedelta
 from pathlib import Path
-
+import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -19,14 +19,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
+#TODO move this to .env
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-)@y_*rrr1_vv@#$+9ix0x%1ke)-vcde%)(b3=x4s%#eh!_ns+e'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
-
+ALLOWED_HOSTS = [
+    'backend',
+    'localhost',
+    '127.0.0.1',
+    '0.0.0.0',
+    '[::1]',  # For IPv6 localhost
+]
 
 # Application definition
 
@@ -54,6 +60,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'api.middleware.AINodeRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -79,7 +86,6 @@ SIMPLE_JWT = {
     'USER_ID_FIELD': 'id',
     'USER_ID_CLAIM': 'user_id',
 }
-
 
 # drf-spectacular settings
 SPECTACULAR_SETTINGS = {
@@ -114,8 +120,12 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('POSTGRES_DB'),  # From .env file
+        'USER': os.getenv('POSTGRES_USER'),  # From .env file
+        'PASSWORD': os.getenv('POSTGRES_PASSWORD'),  # From .env file
+        'HOST': os.getenv('POSTGRES_HOST', 'localhost'),  # 'postgres' service in Docker
+        'PORT': '5432',  # Default PostgreSQL port
     }
 }
 
@@ -138,6 +148,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+DATA_UPLOAD_MAX_NUMBER_FIELDS=2000
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
