@@ -10,24 +10,63 @@ import google.generativeai as genai
 from langchain_huggingface import HuggingFaceEmbeddings
 import chromadb
 import logging
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
 class RAGPipeline:
+    _instance = None
+    _is_initialized = False
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(RAGPipeline, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self, embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2", 
-                 gemini_model: str = "models/gemini-2.5-flash-lite"):
+                 gemini_model: str = "models/gemini-2.5-flash"):
         """
-        Initialize RAG pipeline with ChromaDB integration.
+        Initialize RAG pipeline with cached models.
         """
-        self.embedding_model = HuggingFaceEmbeddings(model_name=embedding_model_name)
-        
-        # Set up Gemini
+        # Skip initialization if already done
+        if self._is_initialized:
+            return
+
+        try:
+            # Cache the embedding model
+            self.embedding_model = self._get_embedding_model(embedding_model_name)
+            
+            # Set up Gemini with caching
+            self.gemini = self._setup_gemini(gemini_model)
+            
+            self._is_initialized = True
+            logger.info("RAGPipeline initialized successfully with cached models")
+            
+        except Exception as e:
+            logger.error(f"Error initializing RAGPipeline: {e}")
+            raise
+
+    @lru_cache(maxsize=1)
+    def _get_embedding_model(self, model_name: str):
+        """Cache and return the embedding model"""
+        logger.info(f"Loading embedding model: {model_name}")
+        return HuggingFaceEmbeddings(model_name=model_name)
+
+    @lru_cache(maxsize=1)
+    def _setup_gemini(self, model_name: str):
+        """Cache and return the Gemini model"""
+        logger.info(f"Setting up Gemini model: {model_name}")
         load_dotenv()
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError("GOOGLE_API_KEY environment variable not set.")
         genai.configure(api_key=api_key)
-        self.gemini = genai.GenerativeModel(gemini_model)
+        return genai.GenerativeModel(model_name)
+
+    @lru_cache(maxsize=100)
+    def _embed_query(self, query: str) -> List[float]:
+        """Cache query embeddings for repeated queries"""
+        return self.embedding_model.embed_query(query)
 
     async def retrieve_context_from_chromadb(self, vector_db_path: str, query: str, k: int = 5) -> List[Dict[str, Any]]:
         """

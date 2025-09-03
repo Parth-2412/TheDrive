@@ -148,6 +148,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+DATA_UPLOAD_MAX_NUMBER_FIELDS=2000
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/

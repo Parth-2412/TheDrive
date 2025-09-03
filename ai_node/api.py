@@ -471,7 +471,8 @@ def initialize_ai_node_auth() -> ServerService:
         username=username
     )
 
-
+processor = None
+rag = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
@@ -481,6 +482,12 @@ async def lifespan(app: FastAPI):
     
     try:
         service = initialize_ai_node_auth()
+        global processor
+        processor = FileProcessor()
+        global rag
+        rag = RAGPipeline(
+            embedding_model_name="sentence-transformers/all-MiniLM-L6-v2"
+        )
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         # Attempt initial login
@@ -581,7 +588,6 @@ async def ingest(
     filename = file.filename
 
     # Process file using existing logic
-    processor = FileProcessor()
     with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1]) as tmp_file:
         tmp_file.write(file_bytes)
         temp_path = tmp_file.name
@@ -798,10 +804,6 @@ async def chat(
         )
         db_session.add(user_message)
         
-        # Initialize RAG pipeline
-        rag = RAGPipeline(
-            embedding_model_name="sentence-transformers/all-MiniLM-L6-v2"
-        )
         
         # Run RAG with ChromaDB
         rag_result = await rag.run_with_chromadb(
@@ -929,9 +931,13 @@ async def manual_login():
 
 if __name__ == "__main__":
     import uvicorn
+   
+
     uvicorn.run(
         "api:app",
         host="0.0.0.0",
         port=int(os.getenv("PORT", 5000)),
-        reload=os.getenv("ENVIRONMENT") == "development"
+        reload=os.getenv("ENVIRONMENT") == "development",
+        reload_excludes=["model_cache/*", "vector_dbs/*"],  # Exclude directories from reload
+        reload_includes=["*.py"],  # Only reload for Python file changes
     )

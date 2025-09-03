@@ -6,3 +6,4 @@ TheDrive_env
 test_data/
 
 vector_dbs/
+model_cache/

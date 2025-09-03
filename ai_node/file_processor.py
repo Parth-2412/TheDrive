@@ -26,42 +26,89 @@ import fitz  # PyMuPDF
 from io import BytesIO
 import google.generativeai as genai
 from dotenv import load_dotenv
+from functools import lru_cache
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class FileProcessor:
+    _instance = None
+    _models_initialized = False
+    
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(FileProcessor, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 100):
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size, 
-            chunk_overlap=chunk_overlap,
-            add_start_index=True
-        )
+        # Only initialize models once
+        if not self._models_initialized:
+            self.text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=chunk_size, 
+                chunk_overlap=chunk_overlap,
+                add_start_index=True
+            )
 
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            
+            # Initialize models with caching
+            self._initialize_models()
+            
+            # Set flag to avoid re-initialization
+            self.__class__._models_initialized = True
 
-        # BLIP for image captioning
-        self.blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-        self.blip_model = BlipForConditionalGeneration.from_pretrained(
-            "Salesforce/blip-image-captioning-base"
-        ).to(self.device)
+    @lru_cache(maxsize=None)
+    def _load_model(self, model_name: str, model_class):
+        """Cache and load models"""
+        return model_class.from_pretrained(model_name)
 
-        # Table Detection Model
-        self.table_detector = TableTransformerForObjectDetection.from_pretrained(
-            "microsoft/table-transformer-detection"
-        ).to(self.device)
-        self.table_processor = DetrImageProcessor.from_pretrained(
-            "microsoft/table-transformer-detection"
-        )
-
-        # Gemini for table descriptions
-        load_dotenv()
-        api_key = os.getenv("GOOGLE_API_KEY")
-        if api_key:
-            genai.configure(api_key=api_key)
-            self.gemini = genai.GenerativeModel("models/gemini-2.5-flash-lite")
-        else:
-            self.gemini = None
+    def _initialize_models(self):
+        """Initialize all models with caching"""
+        logging.info("Initializing models with caching...")
         
+        # Cache directories
+        os.makedirs("/app/model_cache", exist_ok=True)
+        
+        try:
+            # BLIP initialization with caching
+            logging.info("Loading BLIP model...")
+            self.blip_processor = BlipProcessor.from_pretrained(
+                "Salesforce/blip-image-captioning-base",
+                cache_dir="/app/model_cache/blip"
+            )
+            self.blip_model = self._load_model(
+                "Salesforce/blip-image-captioning-base",
+                BlipForConditionalGeneration
+            ).to(self.device)
+
+            # Table Detection initialization with caching
+            logging.info("Loading Table Transformer model...")
+            self.table_detector = self._load_model(
+                "microsoft/table-transformer-detection",
+                TableTransformerForObjectDetection
+            ).to(self.device)
+            self.table_processor = DetrImageProcessor.from_pretrained(
+                "microsoft/table-transformer-detection",
+                cache_dir="/app/model_cache/table_transformer"
+            )
+
+            # Gemini initialization
+            logging.info("Initializing Gemini...")
+            load_dotenv()
+            api_key = os.getenv("GOOGLE_API_KEY")
+            if api_key:
+                genai.configure(api_key=api_key)
+                self.gemini = genai.GenerativeModel("models/gemini-2.5-flash")
+            else:
+                self.gemini = None
+                logging.warning("No Google API key found for Gemini")
+
+            logging.info("All models initialized successfully!")
+
+        except Exception as e:
+            logging.error(f"Error initializing models: {str(e)}")
+            raise
+
+        # Initialize loader map
         self.loader_map = {
             '.pdf': PyPDFLoader,
             '.docx': Docx2txtLoader,
@@ -92,7 +139,7 @@ class FileProcessor:
         
         target_sizes = torch.tensor([image.size[::-1]]).to(self.device)
         results = self.table_processor.post_process_object_detection(
-            outputs, target_sizes=target_sizes, threshold=0.5
+            outputs, target_sizes=target_sizes, threshold=0.8
         )[0]
         
         detected_tables = []

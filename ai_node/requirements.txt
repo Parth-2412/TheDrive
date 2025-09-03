@@ -32,3 +32,4 @@ pdf2image
 transformers
 torch
 PyMuPDF
+pytesseract
