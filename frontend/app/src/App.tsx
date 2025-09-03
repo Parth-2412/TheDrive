@@ -13,6 +13,7 @@ import Register from './pages/Register';
 import axiosInstance, { aiNodeInstance } from './services/api.service';
 import './global.css'
 import ChatApp from './components/Chat';
+import { AxiosResponse } from 'axios';
 
 setupIonicReact();
 
@@ -49,7 +50,7 @@ const App: React.FC = () => {
     axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${user.accessToken}`;
     
     axiosInstance.interceptors.response.use(
-      (response) => response, // Return successful responses directly
+      (response: AxiosResponse) => response, // Return successful responses directly
       async (error) => {
         const originalRequest = error.config;
 

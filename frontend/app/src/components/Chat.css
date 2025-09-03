@@ -105,6 +105,43 @@
     background: rgba(0, 0, 0, 0.02);
     border-radius: 20px 20px 0 0;
     min-height: 24px;
+    flex: 1;
+}
+
+.chat-mobile-header {
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 20px 20px 0 0;
+    padding-right: 8px;
+}
+
+.chat-mobile-close {
+    background: rgba(0, 0, 0, 0.1);
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #666;
+    margin-right: 10px;
+    margin-top: 15px;
+    z-index: 1000;
+    flex-shrink: 0;
+}
+
+.chat-mobile-close:hover {
+    background: rgba(0, 0, 0, 0.15);
+    color: #333;
+}
+
+.chat-mobile-close:active {
+    background: rgba(0, 0, 0, 0.2);
+    transform: scale(0.95);
 }
 
 .chat-mobile-handle:active {
@@ -143,26 +180,30 @@
 }
 
 .close-button {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
-    background: rgba(0, 0, 0, 0.08);
-    border: none;
+    background: rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.1);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all 0.2s ease;
-    color: #666;
+    color: #333;
+    font-size: 18px;
+    font-weight: 500;
+    flex-shrink: 0;
 }
 
 .close-button:hover {
-    background: rgba(0, 0, 0, 0.12);
-    color: #333;
+    background: rgba(0, 0, 0, 0.15);
+    color: #000;
+    border-color: rgba(0, 0, 0, 0.15);
 }
 
 .close-button:active {
-    background: rgba(0, 0, 0, 0.16);
+    background: rgba(0, 0, 0, 0.2);
     transform: scale(0.95);
 }
 
@@ -265,6 +306,13 @@
 .fab-chat:active {
     transform: scale(1.05) translateY(-1px);
     box-shadow: 0 6px 20px rgba(97, 85, 180, 0.4);
+}
+
+/* Hide FAB when chat is open */
+.chat-mobile.open ~ .fab-chat {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.8) translateY(20px);
 }
 
 /* Chat Content Area */

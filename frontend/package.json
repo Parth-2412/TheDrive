@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@cyntler/react-doc-viewer": "^1.17.0",
+    "axios": "^1.11.0",
     "mammoth": "^1.10.0",
     "pptx2html": "^0.3.4"
   },

@@ -216,10 +216,7 @@ const Chat = () => {
                 </IonButton>
               )}
             </IonButton>
-            <IonButton shape="round">
 
-                <IonIcon icon={ellipsisVerticalOutline} />
-            </IonButton>
           </IonButtons>
         </IonToolbar>
         
@@ -290,7 +287,14 @@ const ChatApp: React.FC = () => {
       direction: 'y',
       threshold: 15,
       onMove: (event) => {
-        if (event.deltaY > 40) {
+        // Close if dragged down more than 60px
+        if (event.deltaY > 60) {
+          setIsChatOpen(false);
+        }
+      },
+      onEnd: (event) => {
+        // Also close on drag end if dragged down more than 30px
+        if (event.deltaY > 30) {
           setIsChatOpen(false);
         }
       }
@@ -331,11 +335,14 @@ const ChatApp: React.FC = () => {
         ) : (
           <>
             <div className={`chat-mobile ${isChatOpen ? 'open' : ''}`}>
-              <div className="chat-mobile-handle" ref={dragRef}>
-                <span />
+              <div className="chat-mobile-header">
+                <div className="chat-mobile-handle" ref={dragRef}>
+                  <span />
+                </div>
+                <button className="chat-mobile-close" onClick={() => setIsChatOpen(false)}>
+                  <IonIcon icon={closeOutline} />
+                </button>
               </div>
-              
-              
               
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <Chat />

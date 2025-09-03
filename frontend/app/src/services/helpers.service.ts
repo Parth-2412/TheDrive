@@ -35,7 +35,7 @@ export function fromBase64(base64String: string) {
 }
 
 // Convert a string to a Uint8Array using TextEncoder
-export const stringToUint8Array = (base64: string): Uint8Array => {
+export const stringToUint8Array = (base64: string): Uint8Array<ArrayBuffer> => {
   const binaryString = atob(base64);  // Decode the base64 string
   const length = binaryString.length;
   const bytes = new Uint8Array(length);

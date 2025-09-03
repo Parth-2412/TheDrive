@@ -12,7 +12,7 @@ async function mnemonicToSeed(mnemonic: string, passphrase = ''): Promise<Uint8A
   return new Uint8Array(seedBuffer);
 }
 
-async function hkdf(ikm: Uint8Array, info: string, length = 32) {
+async function hkdf(ikm: BufferSource, info: string, length = 32) {
   const salt = new Uint8Array(32);
   const keyMaterial = await crypto.subtle.importKey(
     'raw', ikm, 'HKDF', false, ['deriveBits']
@@ -24,7 +24,7 @@ async function hkdf(ikm: Uint8Array, info: string, length = 32) {
   return new Uint8Array(derived);
 }
 export async function deriveAuthKeypair(mnemonic: string, passphrase = '') {
-  const seed = await mnemonicToSeed(mnemonic, passphrase); // 64 bytes
+  const seed = await mnemonicToSeed(mnemonic, passphrase) as Uint8Array<ArrayBuffer>; // 64 bytes
   const skSeed = await hkdf(seed, 'auth-ed25519', 32); // 32 bytes
   // tweetnacl expects 32-byte seed
   const keyPair = nacl.sign.keyPair.fromSeed(skSeed);
@@ -34,11 +34,11 @@ export async function deriveAuthKeypair(mnemonic: string, passphrase = '') {
   };
 }
 export async function deriveMasterKeyBytes(mnemonic: string, passphrase = '') {
-  const seed = await mnemonicToSeed(mnemonic, passphrase);
+  const seed = await mnemonicToSeed(mnemonic, passphrase) as Uint8Array<ArrayBuffer>;
   return await hkdf(seed, 'master-encryption', 32); // 32 bytes => AES-256
 }
 
-export async function importAesKey(raw: Uint8Array, usages: KeyUsage[] = ['encrypt','decrypt']) {
+export async function importAesKey(raw: BufferSource, usages: KeyUsage[] = ['encrypt','decrypt']) {
   return crypto.subtle.importKey(
     'raw', raw, { name: 'AES-GCM' }, true, usages
   );
