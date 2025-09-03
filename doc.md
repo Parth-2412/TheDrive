@@ -6,13 +6,13 @@ TheDrive is a privacy-first cloud storage platform that combines end-to-end encr
 
 ## Core Architecture Principles
 
-- **Zero-Knowledge Storage**: The backend never sees the content that is stored and the private keys on the client machine . None of the data that is not mandatory to be shared leaves the server
-- **Self-Sovereign Identity**: Users are identified by their public key , while the authentication and the decryption part is done on the basis of the private key which is always on the client machine and never leaves the device , hence maintaining trust that nothing out of the cient machine will ever be able to access the content uploaded by the user .
+- **Zero-Knowledge Storage**: The backend never sees plaintext files or encryption keys. All files are encrypted client-side with unique keys before upload, and only encrypted metadata is stored in the database.
+- **Self-Sovereign Identity**: Users are identified by ED25519 public keys derived from BIP39 seed phrases using HKDF. Authentication uses signed challenges, and private keys never leave the client device.
 - **Per-File Encryption**: Each file is encrypted with a randomly generated AES-256-GCM key, which is then wrapped (encrypted) with the user's master key derived from their seed phrase.
-- **Separated Backend Architecture**: The Django backend handles storage, metadata, and user management, while the FastAPI AI node operates independently and uses public and private keypair to authenticate .
-- **User-Controlled AI Access**: Not all files that are uploaded are sent to AI for the analysis . Only the files that the user chooses to send to AI are sent . Rest all files are kept on the server and does not go anywhere for processing
-- **Session-Based AI Processing**: AI nodes create temporary ChromaDB collections for chat sessions and take back or remove the unwanted data . Chunks that are processed are then encrytped with the AI node master(private) key 
-- **Signed Request Authentication**: All sensitive operations between client and AI node use signatures to verify user authorization and prevent unauthorized access.
+- **Separated Backend Architecture**: The Django backend handles storage, metadata, and user management, while the FastAPI AI node operates independently and authenticates to the backend using its own ED25519 keypair.
+- **User-Controlled AI Access**: Users explicitly enable AI processing for specific files or folders. The client decrypts files locally before sending plaintext to the chosen AI node for processing.
+- **Session-Based AI Processing**: AI nodes create temporary ChromaDB collections for chat sessions and purge all data when sessions are closed. Processed chunks are encrypted with the AI node's master key before storage.
+- **Signed Request Authentication**: All sensitive operations between client and AI node use ED25519 signatures to verify user authorization and prevent unauthorized access.
 - **Dual Database Architecture**: The backend uses PostgreSQL for metadata and encrypted chunks, while the AI node uses ChromaDB for temporary session-based vector storage and retrieval.
 
 ## Technology Stack
@@ -50,10 +50,14 @@ TheDrive is a privacy-first cloud storage platform that combines end-to-end encr
 
 ### Development and Deployment
 - **Docker**: Containerization for backend and AI node services
+- **Docker Compose**: Multi-service orchestration for development
 - **TLS/HTTPS**: Secure transport layer for production deployments
 
 ## System Architecture
+
 TheDrive follows a three-tier architecture that separates concerns between client-side encryption, zero-knowledge storage, and AI processing. The system ensures that sensitive operations are performed on trusted clients while maintaining privacy through cryptographic verification.
+
+![Overall System Architecture](0_OverallArch.svg)
 
 The architecture consists of:
 
@@ -62,7 +66,17 @@ The architecture consists of:
 - **AI Processing Layer**: Offers document analysis and chat capabilities through an independent FastAPI service with ChromaDB
 
 ### User Authentication and Registration
+
 User identity in TheDrive is based on self-sovereign cryptographic keys derived from BIP39 seed phrases. This approach eliminates the need for traditional username/password combinations while providing secure recovery mechanisms.
+
+![Registration and Login Flow](1_Reg&Login.svg)
+
+**Registration Process:**
+1. Client generates a 12-word BIP39 seed phrase using cryptographically secure randomness
+2. The seed phrase is used to derive an ED25519 keypair via HKDF with the salt "auth-ed25519"
+3. The public key serves as the user's unique identifier on the platform
+4. A master encryption key is derived from the same seed using HKDF with salt "master-encryption"
+5. The client registers the public key with the backend, establishing the user account
 
 **Login Process:**
 1. User enters their 12-word seed phrase on any device
@@ -79,9 +93,21 @@ User identity in TheDrive is based on self-sovereign cryptographic keys derived 
 - Challenge-response authentication prevents replay attacks
 - JWT tokens have limited lifetimes and can be refreshed securely
 
+**Key Derivation Hierarchy:**
+```
+Seed Phrase (12 words)
+├── Authentication Key: HKDF(seed, "auth-ed25519") → ED25519 keypair
+└── Drive Master Key: HKDF(seed, "master-encryption") → AES-256-GCM key
+    └── File Keys: Random AES-256-GCM keys wrapped by master key
+```
+
+**Note on Implementation:** The current system uses per-file encryption rather than hierarchical folder keys. Each file gets a unique random encryption key that is wrapped (encrypted) with the user's master key. Folder structure is maintained logically in metadata rather than cryptographically.
+
 ## Storage Architecture
 
-Each file uploaded to TheDrive is encrypted with a unique AES-256-GCM key before transmission to the backend. This approach ensures that even if one file's encryption is compromised, other files remain secure
+Each file uploaded to TheDrive is encrypted with a unique AES-256-GCM key before transmission to the backend. This approach ensures that even if one file's encryption is compromised, other files remain secure.
+
+![File Upload and Storage Flow](2_FileUpload&Storage.svg)
 
 ### File Upload Process
 
@@ -95,8 +121,8 @@ Each file uploaded to TheDrive is encrypted with a unique AES-256-GCM key before
 
 **Backend Processing:**
 1. Client uploads the encrypted file payload via Django REST API
-2. Backend stores the encrypted file in MinIO object storage
-3. File metadata (including encrypted filenames) is stored in PostgreSQL
+2. Backend stores the encrypted file in MinIO object storage with the key format `{file_id}.enc`
+3. File metadata (including wrapped keys and encrypted filenames) is stored in PostgreSQL
 4. No plaintext content or filenames are ever stored on the server
 5. Backend returns a file record with unique ID to the client
 
@@ -118,6 +144,7 @@ Each file uploaded to TheDrive is encrypted with a unique AES-256-GCM key before
 
 **MinIO Object Storage:**
 - Stores encrypted file objects using S3-compatible API
+- Object keys follow the pattern `{file_id}.enc` with no plaintext information
 - Supports horizontal scaling and redundancy
 - Provides durability and availability for encrypted file content
 
@@ -126,7 +153,8 @@ Each file uploaded to TheDrive is encrypted with a unique AES-256-GCM key before
 - Contains wrapped encryption keys and initialization vectors
 - Manages user accounts and authentication data
 - Stores encrypted document chunks for AI-enabled files
-  
+- Maintains folder hierarchy as logical relationships, not cryptographic structure
+
 **Security Features:**
 - Zero-knowledge storage: server cannot decrypt any file content
 - Encrypted filenames prevent metadata analysis
@@ -135,7 +163,9 @@ Each file uploaded to TheDrive is encrypted with a unique AES-256-GCM key before
 
 ## AI Node Architecture and Ingestion Pipeline
 
-The AI Node operates as an independent FastAPI service that processes user-authorized documents for search and chat capabilities. It maintains its own cryptographic identity and encrypts all processed data before storage
+The AI Node operates as an independent FastAPI service that processes user-authorized documents for search and chat capabilities. It maintains its own cryptographic identity and encrypts all processed data before storage.
+
+![AI Ingestion Pipeline](3_Ingestion.svg)
 
 ### AI Node Identity and Authentication
 
@@ -146,8 +176,8 @@ The AI Node operates as an independent FastAPI service that processes user-autho
 4. Backend creates an AINode registry entry linking the node to its cryptographic identity
 
 **Request Verification:**
-- All ingestion requests from clients must be signed with the user's private key
-- AI Node verifies user signatures by calling the backend endpoint
+- All ingestion requests from clients must be signed with the user's ED25519 private key
+- AI Node verifies user signatures by calling the backend `/api/is_user` endpoint
 - Only verified users can submit files for processing
 - AI Node maintains no persistent user sessions during ingestion
 
@@ -183,7 +213,7 @@ The AI Node operates as an independent FastAPI service that processes user-autho
 - AI Node maintains its own master key separate from user keys
 - Each user's processed data is encrypted with the same AI Node master key
 - This allows the AI Node to decrypt and use the data for search/chat while keeping it encrypted at rest
-- Users can revoke AI access by disabling AI features, which prevents future access of their content by AI
+- Users can revoke AI access by disabling AI features, which prevents future access to their content
 
 **Storage Integration:**
 - AI Node has no direct database - all persistent storage goes through the backend
@@ -195,33 +225,39 @@ The AI Node operates as an independent FastAPI service that processes user-autho
 
 The chat functionality provides real-time question-answering capabilities over user-selected documents through session-based vector search and LLM processing.
 
+![Chat Session Flow](4_ChatSession.svg)
+
+### Session Lifecycle Management
+
 **Session Initialization:**
-1. User initiates a chat session via AI Node endpoint with signed request to ensure no Man-in-the-middle attack
-2. Request includes selected files/folders which are selectively sent to the the AI node 
+1. User initiates a chat session via AI Node `/chat/start` endpoint with signed request
+2. Request includes selected files/folders and user's ED25519 signature for authorization
 3. AI Node verifies user signature and fetches encrypted chunks from backend for selected content
 4. AI Node decrypts chunks using its master key and creates a temporary ChromaDB collection
 5. Decrypted chunks and embeddings are loaded into the session-specific ChromaDB collection
 6. AI Node returns session ID to client for subsequent chat interactions
 
 **Chat Interaction Flow:**
-1. Client sends questions to AI Node /chat endpoint with session ID and signed request
+1. Client sends questions to AI Node `/chat` endpoint with session ID and signed request
+2. AI Node performs vector similarity search in the session's ChromaDB collection
 3. Most relevant chunks are retrieved based on semantic similarity to the user's query
 4. Retrieved context is combined with the user's question and sent to Gemini LLM
 5. LLM generates a response with citations to the source documents
 6. AI Node returns the response with document references and chunk citations to the client
 
 **Session Termination:**
-1. User explicitly closes session via /chat/close endpoint or session times out
+1. User explicitly closes session via `/chat/close` endpoint or session times out
 2. AI Node deletes the ChromaDB collection and all session-specific data
 3. No trace of user data remains on the AI Node after session closure
-4. Session metadata is purged from AI Node memory as soon as the session ends
+4. Session metadata is purged from AI Node memory
 
 ### Vector Search and Retrieval
 
 **ChromaDB Integration:**
 - Each chat session gets a unique ChromaDB collection created on the AI Node
 - Collections contain decrypted text chunks and their corresponding embeddings
-- ChromaDB uses its default distance metric
+- ChromaDB uses its default distance metric (typically squared L2/Euclidean distance)
+- Distance scores are converted to similarity scores using the formula: `similarity = 1 / (1 + distance)`
 - Search results include both converted similarity scores and source document metadata
 
 **Context Assembly:**
@@ -250,13 +286,15 @@ The chat functionality provides real-time question-answering capabilities over u
 - Each session operates with isolated ChromaDB collections
 - Sessions cannot access data from other users or other sessions
 - Vector search is limited to documents explicitly selected by the user for that session
-- No cross-session and cross useer data leakage as mentioned in the Problem Statement
+- No cross-session data leakage or contamination
 
 **Privacy Guarantees:**
-- Session data is short lived and deleted immediately upon end of the session
-- AI Node retains no memory of conversations after sessions end ensuring no log leaks
-- Document access is limited to user-authorized
-- No training or learning occurs from user conversations hence no data is sent anywhere
+- Session data is ephemeral and deleted immediately upon session closure
+- AI Node retains no memory of conversations after sessions end
+- Document access is limited to user-authorized content only
+- No training or learning occurs from user conversations
+
+# Setup Instructions
 
 
 # Setup Instructions
@@ -345,4 +383,3 @@ npm run dev
 ---
 
 For troubleshooting or advanced configuration, refer to the README or open an issue on GitHub.
-
