@@ -23,7 +23,7 @@ User Registration/Login:
 4. Private key stays client-side, never transmitted
 5. User can login from any device with same seed phrase
 6. Once registered, the key pair is stored on the client's device and whenever the client opens our app, the key pair is detected and a signed nonce (nonce is provided by the server upon login request) is sent to the server for login, which on successful login returns a JWT token for further authentication
-7. Whenever a user logsout, the JWT token and stored key pair is deleted
+7. Whenever a user log out, the JWT token and stored key pair is deleted
 ```
 
 ### Key Derivation Hierarchy
@@ -104,7 +104,7 @@ AI Nodes are autonomous entities similar to blockchain nodes:
 ```
 Client → AI Node Communication:
 ├── TLS 1.3 for transport security
-├── Prevents man-in-the-middle attacks
+├── Prevents man-in-the-middle to interfere
 ├── Ensures only intended AI node can access content
 ```
 
@@ -118,7 +118,7 @@ Chat Session Lifecycle:
 3. Server sends encrypted chunks to AI node
 4. AI node decrypts and loads into session memory
 5. Real-time chat via WebSocket connection
-6. Session end → AI node purges all data
+6. Session end → AI node deletes all data
 ```
 
 ### WebSocket Communication Flow
@@ -130,7 +130,7 @@ Direct WebSocket between User and AI Node:
 ├── Direct WebSocket connection for low latency
 ├── Server provides encrypted chunks at session start
 ├── Queries and responses flow directly
-├── Session termination triggers data purge
+├── Session termination triggers data deletion
 ```
 
 ## Data Flow Diagrams
@@ -196,7 +196,7 @@ Direct WebSocket between User and AI Node:
         │◄──────────────────┼──────────────────►│
         │                   │                   │
         │ 6. End session    │                   │
-        ├──────────────────►│ 7. Purge AI data  │
+        ├──────────────────►│ 7.Delete AI data  │
         │                   ├──────────────────►│
 ```
 
