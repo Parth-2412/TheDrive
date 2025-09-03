@@ -1,6 +1,7 @@
 ## Architecture and Worklow
 Can be found at `doc.md`
-## Setup environment variables in the root folder
+
+## Setup the .env file in the root folder
 ```
 MINIO_ROOT_USER=placeholder
 MINIO_ROOT_PASSWORD=placeholder
@@ -8,8 +9,6 @@ MINIO_BUCKET_NAME=thedrive
 POSTGRES_DB=thedrive
 POSTGRES_USER=placeholder
 POSTGRES_PASSWORD=placeholder
-
-# .env file template
 
 # MinIO Configuration
 MINIO_ROOT_USER=placeholder
@@ -38,7 +37,8 @@ ENVIRONMENT=development
 ```
 
 - Setup the username passwords as you want
-- To get the AI node credentials (public key, private key, master key), run `python3 ai_node/script.py`
+- To get the AI node cryptographic credentials (public key, private key, master key), run `python3 ai_node/script.py` and copy it exactly into the .env section where AI node cryptographic credentials are defined
+
 ## Running
-- To run the backend, you need docker-compose and docker installed and the docker daemon running
+- To run the app, you need docker-compose and docker installed and the docker daemon running
 - Then in the root folder run `docker-compose up --build`
