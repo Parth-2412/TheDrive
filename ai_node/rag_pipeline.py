@@ -113,7 +113,7 @@ class RAGPipeline:
             logger.error(f"Error retrieving context from ChromaDB: {e}")
             return []
 
-    def generate_answer(self, query: str, context_chunks: List[Dict[str, Any]], 
+    def generate_answer(self, query: str, context_chunks: List[Dict[str, Any]],
                        memory: Optional[List[Dict]] = None) -> Dict[str, Any]:
         """
         Generate answer with enhanced source attribution.
@@ -124,7 +124,7 @@ class RAGPipeline:
                 "citations": [],
                 "context_chunks_used": 0
             }
-        
+
         # Build context with numbered sources for precise attribution
         context_parts = []
         for i, chunk in enumerate(context_chunks):
@@ -132,43 +132,47 @@ class RAGPipeline:
             file_name = meta.get('file') or os.path.basename(meta.get('source', 'Unknown'))
             chunk_idx = meta.get('chunk_index', i)
             page = meta.get('page_number')
-            
+
             source_label = f"[Source {i+1}: {file_name}"
             if page:
                 source_label += f", Page {page}"
             source_label += f", Chunk {chunk_idx}]"
             context_parts.append(f"{source_label}\n{chunk['content']}\n")
-        
+
         context_text = "\n".join(context_parts)
-        
+
         # Build memory context
         memory_text = ""
         if memory:
             memory_text = "\n\nConversation History:\n" + "\n".join([
                 f"{msg['role'].upper()}: {msg['content']}" for msg in memory[-6:]  # Last 3 exchanges
             ])
-        
-        # Enhanced prompt for source attribution
-        prompt = f"""You are a helpful AI assistant. Answer the user's question using the provided context.
 
-IMPORTANT: When referencing information, cite the specific source using the format [Source X] where X matches the source number provided in the context.
+        # Natural, file-aware conversation prompt with content type guidance
+        prompt = f"""You are a helpful AI assistant integrated into a file storage system. Users ask you questions about their stored files, and you provide natural, helpful answers based on the file content.
 
-Context from Documents:
+FILE INFORMATION AVAILABLE:
 {context_text}
+
 {memory_text}
 
-Current Question: {query}
+USER QUESTION: {query}
 
-Instructions:
-- Use the provided context to answer the question accurately
-- Always cite sources using [Source X] format when referencing information
-- If information comes from multiple sources, cite all relevant sources like [Source 1][Source 2]
-- Be specific about which source supports each claim
-- If the context doesn't contain enough information, say so clearly
-- Maintain consistency with the conversation history
-- Be concise but comprehensive
+CONTENT TYPE GUIDANCE (use naturally):
+- For tables/data: Say "according to the data" or "the table shows" or "based on the data in"
+- For images: Describe what the image shows using the caption and OCR naturally (e.g., "there is an image of a landscape" or "the photo showing a building")
+- For regular text: Reference as "in the document"
 
-Answer:"""
+CONVERSATION STYLE:
+- Act like a knowledgeable assistant who has read and understood the user's files
+- Answer naturally about file content without mentioning technical details
+- Reference file content conversationally (e.g., "In your document...", "From the data in your file...")
+- Be helpful and informative, like a knowledgeable colleague
+- If you don't have enough information from the files, say so naturally
+- Keep responses conversational and engaging
+- Focus on being useful for file-related questions
+
+Remember: You're helping users understand and work with their stored files - keep it natural and focused on their content!"""
 
         try:
             # Generate response
@@ -177,7 +181,7 @@ Answer:"""
         except Exception as e:
             logger.error(f"Error generating answer with Gemini: {e}")
             answer = "I apologize, but I encountered an error while generating the response. Please try again."
-        
+
         # Prepare enhanced citations
         citations = []
         for i, chunk in enumerate(context_chunks):
@@ -194,7 +198,7 @@ Answer:"""
                 "similarity": round(chunk.get("similarity", 0), 3),
                 "chunk_content": chunk['content']
             })
-        
+
         return {
             "answer": answer,
             "citations": citations,
