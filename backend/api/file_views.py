@@ -779,3 +779,121 @@ def bulk_delete_files(request):
 
     # If serializer is not valid, return validation error response
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# Add these functions
+
+class FilePathResponse(serializers.Serializer):
+    folders = serializers.ListSerializer(child=FolderSerializer())
+    current_files = serializers.ListSerializer(child=FileSerializer())
+
+class FileNamesRequest(serializers.Serializer):
+    file_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=True
+    )
+    
+
+class FileNameResponse(serializers.ModelSerializer):
+    class Meta:
+        model = File
+        fields = ['id', 'name_encrypted', 'file_name_hash']
+
+@extend_schema(
+    operation_id='get_folder_path',
+    summary='Get folder path and siblings',
+    description='Get all parent folders in path and sibling files',
+    responses={200: FilePathResponse},
+    tags=['Folders']
+)
+@api_view(['GET'])
+def get_folder_path(request, folder_id):
+    """Get the complete path of folders leading to this folder and all sibling files"""
+    
+    # Handle root folder case
+    if folder_id == 'root':
+        root_files = File.objects.filter(folder=None, user=request.user).order_by('created_at')
+        return Response({
+            'folders': [],
+            'current_files': FileSerializer(root_files, many=True, context={'request': request}).data
+        })
+    
+    folder = get_object_or_404(Folder, id=folder_id, user=request.user)
+    
+    try:
+        # Modified recursive query to select all needed fields
+        query = """
+            WITH RECURSIVE folder_path AS (
+                -- Base case: start with the current folder
+                SELECT id, parent_id as parent, name_encrypted, folder_name_hash, 
+                       created_at, updated_at, 1 as level
+                FROM folders 
+                WHERE id = %s AND user_id = %s
+                
+                UNION ALL
+                
+                -- Recursive case: get all parents
+                SELECT f.id, f.parent_id as parent, f.name_encrypted, f.folder_name_hash,
+                       f.created_at, f.updated_at, fp.level + 1
+                FROM folders f
+                INNER JOIN folder_path fp ON f.id = fp.parent_id
+            )
+            SELECT id, parent, name_encrypted, folder_name_hash, 
+                   created_at, updated_at
+            FROM folder_path
+            ORDER BY level DESC;
+        """
+        
+        with connection.cursor() as cursor:
+            cursor.execute(query, [folder_id, request.user.id])
+            # Convert to dict for serializer
+            columns = [col[0] for col in cursor.description]
+            folder_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        # Get all files in the current folder
+        current_files = File.objects.filter(folder=folder, user=request.user).order_by('created_at')
+        
+        # Use FolderSerializer directly
+        return Response({
+            'folders': FolderSerializer(folder_results, many=True, context={'request': request}).data,
+            'current_files': FileSerializer(current_files, many=True, context={'request': request}).data
+        })
+        
+    except Exception as e:
+        return Response(
+            {'error': f'Failed to get folder path: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@extend_schema(
+    operation_id='get_file_names',
+    summary='Get file names by IDs',
+    description='Get encrypted names and hashes for a list of file IDs',
+    request=FileNamesRequest,
+    responses={200: FileNameResponse(many=True)},
+    tags=['Files']
+)
+@api_view(['POST'])
+def get_file_names(request):
+    """Get file names for a list of file IDs"""
+    serializer = FileNamesRequest(data=request.data)
+    
+    if serializer.is_valid():
+        file_ids = serializer.validated_data['file_ids']
+        try:
+            files = File.objects.filter(
+                id__in=file_ids, 
+                user=request.user
+            ).values('id', 'name_encrypted', 'file_name_hash')
+            
+            return Response(list(files))
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to get file names: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# Add these to the serializers section
+
