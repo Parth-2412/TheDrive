@@ -1,4 +1,7 @@
-<svg id="export-svg" width="100%" xmlns="http://www.w3.org/2000/svg" style="max-width: 3049px;" viewBox="-202 -10 3049 2072" role="graphics-document document" aria-roledescription="sequence"><style xmlns="http://www.w3.org/1999/xhtml">/* Google Inc.
+<svg id="export-svg" width="100%" xmlns="http://www.w3.org/2000/svg" style="max-width: 3049px;" viewBox="-202 -10 3049 2072" role="graphics-document document" aria-roledescription="sequence">
+<!-- White background -->
+<rect x="-202" y="-10" width="3049" height="2072" fill="white"/>
+<style xmlns="http://www.w3.org/1999/xhtml">/* Google Inc.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
