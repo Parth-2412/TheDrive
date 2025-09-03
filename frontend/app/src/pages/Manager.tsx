@@ -267,7 +267,13 @@ const Manager = () => {
         // TODO handle the whole drive
       }
       else {
-        await axiosInstance.put(`/api/folders/root/disable_ai/`)
+        await axiosInstance.put(`/api/folders/root/set_folder_ai/`, { value : false })
+        await present({
+            message: `AI disabled successfully for the whole drive!`,
+            duration: 2000,
+            color: 'success',
+            position: 'bottom'
+          });
       }
     }
     else if(!selectedFiles[0].isDirectory) {
@@ -806,7 +812,7 @@ const Manager = () => {
               fontSize: '12px',
               color: '#888'
             }}>
-              <span>Progress: {processingFiles.progress.current}/{processingFiles.progress.total}</span>
+              <span>Progress: {processingFiles.progress.current-1}/{processingFiles.progress.total}</span>
               <span>{Math.round((processingFiles.progress.current / processingFiles.progress.total) * 100)}%</span>
             </div>
             <div style={{

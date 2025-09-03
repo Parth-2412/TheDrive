@@ -799,68 +799,90 @@ class FileNameResponse(serializers.ModelSerializer):
         fields = ['id', 'name_encrypted', 'file_name_hash']
 
 @extend_schema(
-    operation_id='get_folder_path',
-    summary='Get folder path and siblings',
+    operation_id='get_file_family',
+    summary='Get file ancestry and siblings',
     description='Get all parent folders in path and sibling files',
     responses={200: FilePathResponse},
     tags=['Folders']
 )
 @api_view(['GET'])
-def get_folder_path(request, folder_id):
-    """Get the complete path of folders leading to this folder and all sibling files"""
+def get_file_family(request, file_id):
+    """Get the complete path of folders leading to this file and all sibling files"""
     
-    # Handle root folder case
-    if folder_id == 'root':
-        root_files = File.objects.filter(folder=None, user=request.user).order_by('created_at')
-        return Response({
-            'folders': [],
-            'current_files': FileSerializer(root_files, many=True, context={'request': request}).data
-        })
-    
-    folder = get_object_or_404(Folder, id=folder_id, user=request.user)
+    file = get_object_or_404(File, id=file_id, user=request.user)
     
     try:
-        # Modified recursive query to select all needed fields
+        # Handle root folder case
+        if not file.folder:
+            root_files = File.objects.filter(folder=None, user=request.user).order_by('created_at')
+            return Response({
+                'folders': [],
+                'current_files': FileSerializer(root_files, many=True, context={'request': request}).data
+            })
+
+        # Modified recursive query to get folder path
         query = """
             WITH RECURSIVE folder_path AS (
-                -- Base case: start with the current folder
-                SELECT id, parent_id as parent, name_encrypted, folder_name_hash, 
-                       created_at, updated_at, 1 as level
-                FROM folders 
-                WHERE id = %s AND user_id = %s
+                -- Base case: start with the file's folder
+                SELECT 
+                    f.id, 
+                    f.parent_id, 
+                    f.name_encrypted, 
+                    f.folder_name_hash,
+                    f.created_at, 
+                    f.updated_at, 
+                    1 as level
+                FROM folders f
+                WHERE f.id = %s AND f.user_id = %s
                 
                 UNION ALL
                 
-                -- Recursive case: get all parents
-                SELECT f.id, f.parent_id as parent, f.name_encrypted, f.folder_name_hash,
-                       f.created_at, f.updated_at, fp.level + 1
+                -- Recursive case: get all parent folders
+                SELECT 
+                    f.id, 
+                    f.parent_id, 
+                    f.name_encrypted, 
+                    f.folder_name_hash,
+                    f.created_at, 
+                    f.updated_at, 
+                    fp.level + 1
                 FROM folders f
                 INNER JOIN folder_path fp ON f.id = fp.parent_id
+                WHERE f.user_id = %s
             )
-            SELECT id, parent, name_encrypted, folder_name_hash, 
-                   created_at, updated_at
+            SELECT 
+                id, 
+                parent_id as parent, 
+                name_encrypted, 
+                folder_name_hash,
+                created_at, 
+                updated_at
             FROM folder_path
             ORDER BY level DESC;
         """
         
         with connection.cursor() as cursor:
-            cursor.execute(query, [folder_id, request.user.id])
-            # Convert to dict for serializer
+            cursor.execute(query, [file.folder.id, request.user.id, request.user.id])
             columns = [col[0] for col in cursor.description]
-            folder_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            folder_results = [
+                dict(zip(columns, row)) 
+                for row in cursor.fetchall()
+            ]
         
-        # Get all files in the current folder
-        current_files = File.objects.filter(folder=folder, user=request.user).order_by('created_at')
+        # Get all sibling files (files in the same folder)
+        sibling_files = File.objects.filter(
+            folder=file.folder, 
+            user=request.user
+        ).order_by('created_at')
         
-        # Use FolderSerializer directly
         return Response({
             'folders': FolderSerializer(folder_results, many=True, context={'request': request}).data,
-            'current_files': FileSerializer(current_files, many=True, context={'request': request}).data
+            'current_files': FileSerializer(sibling_files, many=True, context={'request': request}).data
         })
         
     except Exception as e:
         return Response(
-            {'error': f'Failed to get folder path: {str(e)}'},
+            {'error': f'Failed to get file path: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 

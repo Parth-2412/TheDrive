@@ -30,6 +30,8 @@ urlpatterns = [
     path('files/<uuid:file_id>/move/', file_views.move_file, name='move_file'),
     path('files/<uuid:file_id>/delete/', file_views.delete_file, name='delete_file'),
     path('files/toggle/', file_views.toggle_files_ai, name='toggle_files_ai'),
+    path('files/get_file_names/', file_views.get_file_names, name='get_file_names'),
+    path('files/<uuid:file_id>/get_file_family/', file_views.get_file_family, name='get_file_family'),
 
     #chunk endpoints
     path('chunks/store/', node_views.store_chunks, name='store_chunks'),
