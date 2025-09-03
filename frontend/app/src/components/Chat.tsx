@@ -156,7 +156,7 @@ const Chat = () => {
     setIsTyping(true);
     try {
       let _session = sessionId;
-      if(!currentContext){
+      if(!_session){
         const response = await startSession(currentPath)
         _session = response.session_id
         setCurrentContext(currentPath)

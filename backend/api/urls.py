@@ -23,6 +23,7 @@ urlpatterns = [
     
     # File endpoints
     path('files/', file_views.upload_file, name='upload_file'),
+    path('files/bulk_delete/', file_views.bulk_delete_files, name='bulk_delete_files'),
     path('files/<uuid:file_id>/download/', file_views.download_file, name='download_file'),
     path('files/<uuid:file_id>/rename/', file_views.rename_file, name='rename_file'),
     path('files/<uuid:file_id>/copy/', file_views.copy_file, name='copy_file'),

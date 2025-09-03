@@ -723,3 +723,59 @@ def toggle_files_ai(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@extend_schema(
+    operation_id='bulk_delete_files',
+    summary='Bulk delete files',
+    description='Delete multiple files in a single request',
+    request=ToggleFilesAISerializer,
+    responses={204: None},
+    tags=['Files']
+)
+@api_view(['DELETE'])
+def bulk_delete_files(request):
+    """Bulk delete files"""
+
+    # Deserialize and validate the request data
+    serializer = ToggleFilesAISerializer(data=request.data)
+
+    if serializer.is_valid():
+        file_ids = serializer.validated_data['file_ids']
+        try:
+            minio_client = get_minio_client()
+            files_to_delete = File.objects.filter(id__in=file_ids, user=request.user)
+
+            if not files_to_delete.exists():
+                return Response(
+                    {'error': 'No files found or you do not have permission to delete these files'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Collect MinIO paths before deleting DB records
+            minio_paths = [get_file_path(file) for file in files_to_delete]
+
+            with transaction.atomic():
+                deleted_count, _ = files_to_delete.delete()
+
+                if deleted_count == 0:
+                    return Response(
+                        {'error': 'No files were deleted'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Delete from MinIO
+                for path in minio_paths:
+                    try:
+                        minio_client.remove_object(MINIO_BUCKET, path)
+                    except S3Error:
+                        pass  # File might not exist
+
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to bulk delete files: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    # If serializer is not valid, return validation error response
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

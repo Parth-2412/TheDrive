@@ -37,8 +37,8 @@ const sortFiles = (items, sortKey = 'name', direction = 'asc') => {
   };
 
   // Sort folders and files separately
-  const sortedFolders = [...folders].sort(sortFunction);
-  const sortedFiles = [...files].sort(sortFunction);
+  const sortedFolders = [...folders].map(folder => ({ ...folder })).sort(sortFunction);
+  const sortedFiles = [...files].map(file => ({ ...file })).sort(sortFunction);
 
   // Always return folders first, then files
   return [...sortedFolders, ...sortedFiles];
