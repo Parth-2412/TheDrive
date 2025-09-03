@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import {
   IonContent,
   IonPage,
@@ -25,9 +25,11 @@ import { ChatMessage, ProChat } from '@ant-design/pro-chat';
 import Manager from '../pages/Manager';
 import './Chat.css'
 import { createGesture } from '@ionic/react';
-import { aiNodeInstance } from '../services/api.service'; // Assume this is your configured axios instance
+import axiosInstance, { aiNodeInstance } from '../services/api.service'; // Assume this is your configured axios instance
 import { useRecoilState } from 'recoil';
 import { _navState, driveState, IFile, IFolder } from '../state/nav';
+import { decryptFileName } from '../services/encrypt.service';
+import { User, userState } from '../state/user';
 
 // Types
 
@@ -128,7 +130,7 @@ const Chat = () => {
   const [{ currentFolder, currentFileOpened }]= useRecoilState(_navState)
   const [currentContext, setCurrentContext] = useState<IFile | IFolder | null>(null);
   const currentPath = currentFileOpened || currentFolder;
-
+  const [user,] = useRecoilState(userState);
   const {
     sessionId,
     isLoading: sessionLoading,
@@ -139,7 +141,7 @@ const Chat = () => {
     clearError
   } = useChatSession();
 
-  const [isTyping, setIsTyping] = useState(false);
+
 
   // Cleanup session on unmount
   useEffect(() => {
@@ -150,10 +152,9 @@ const Chat = () => {
     };
   }, [sessionId, closeSession]);
 
-  const handleSendMessage = async (content: ChatMessage[]): Promise<string> => {
+  const handleSendMessage = async (content: ChatMessage[]): Promise<string | ReactNode> => {
   
 
-    setIsTyping(true);
     try {
       let _session = sessionId;
       if(!_session){
@@ -162,23 +163,32 @@ const Chat = () => {
         setCurrentContext(currentPath)
       }
       const response = await sendMessage(content.at(-1)?.content?.toString() as string, _session as string);
-      
+      const file_ids = response.citations.map(c => c.file_id)
+      const file_names_response =  await axiosInstance.post<(Pick<IFile, 'id'> & { name_encrypted : string;})[]>('/api/files/get_file_names/', {
+        file_ids,
+      })
+      const file_names = Object.fromEntries(await Promise.all(file_names_response.data.map(f => {
+        const func = async () => {
+          return [f.id, await decryptFileName(f.name_encrypted, (user as User).masterAesKey)]
+        }
+        return func()
+      } )))
+      console.log(file_names);
       // Format response with citations if available
       let formattedResponse = response.answer;
       if (response.citations && response.citations.length > 0) {
         formattedResponse += '\n\n**Sources:**\n';
         response.citations.forEach((citation, index) => {
-          formattedResponse += `${index + 1}. ${citation.file_name} (similarity: ${(citation.similarity * 100).toFixed(1)}%)\n`;
+          formattedResponse += `${index + 1}. ${file_names[citation.file_id] || citation.file_name }\n`;
         });
       }
       
-      return formattedResponse;
+      return  formattedResponse;
     } catch (error: any) {
       console.error('Chat error:', error);
       const errorMsg = error?.response?.data?.detail || error.message || 'Failed to send message';
       return errorMsg;
     } finally {
-      setIsTyping(false);
     }
   };
   const getHelloMessage = () => {
@@ -233,6 +243,7 @@ const Chat = () => {
           locale='en-US'
           displayMode='chat'
           helloMessage={getHelloMessage()}
+
           //@ts-expect-error
           disabled={!sessionId || sessionLoading}
           placeholder={

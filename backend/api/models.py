@@ -168,7 +168,7 @@ class File(StorageEntity):
     
     # Additional AI processing field for files
     ai_processed_at = models.DateTimeField(null=True, blank=True)
-    
+    page_number = models.PositiveIntegerField(null=True, blank=True)
     # Checksums for integrity
     file_hash = models.CharField(
         max_length=64, 

@@ -910,7 +910,7 @@ async def close_session(
         # Delete vector database directory
         vector_db_path = session_row["vector_db_path"]
         if os.path.exists(vector_db_path):
-            shutil.rmtree(vector_db_path, ignore_errors=True)
+            shutil.rmtree(vector_db_path)
         
         # Delete session from database
         await db_session.execute(
