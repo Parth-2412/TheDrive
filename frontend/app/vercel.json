@@ -3,7 +3,9 @@
     {
       "source": "/apiv1/(.*)",
       "destination": "https://34.171.86.151/$1"
-    }
+    },
+        { "source": "/(.*)", "destination": "/" }
+      
   ],
   "headers": [
     {
